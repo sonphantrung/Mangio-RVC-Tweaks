@@ -4,10 +4,9 @@ import numpy as np
 import os
 import sys
 
-from shlex import quote as RQuote
 import random
 
-import csv
+#import csv
 
 platform_stft_mapping = {
     'linux': 'stftpitchshift',
@@ -17,65 +16,34 @@ platform_stft_mapping = {
 
 stft = platform_stft_mapping.get(sys.platform)
 
-def CSVutil(file, rw, type, *args):
-    if type == 'formanting':
-        if rw == 'r':
-            with open(file) as fileCSVread:
-                csv_reader = list(csv.reader(fileCSVread))
-                return (
-                    csv_reader[0][0], csv_reader[0][1], csv_reader[0][2]
-                ) if csv_reader is not None else (lambda: exec('raise ValueError("No data")'))()
-        else:
-            if args:
-                doformnt = args[0]
-            else:
-                doformnt = False
-            qfr = args[1] if len(args) > 1 else 1.0
-            tmb = args[2] if len(args) > 2 else 1.0
-            with open(file, rw, newline='') as fileCSVwrite:
-                csv_writer = csv.writer(fileCSVwrite, delimiter=',')
-                csv_writer.writerow([doformnt, qfr, tmb])
-    elif type == 'stop':
-        stop = args[0] if args else False
-        with open(file, rw, newline='') as fileCSVwrite:
-            csv_writer = csv.writer(fileCSVwrite, delimiter=',')
-            csv_writer.writerow([stop])
-
-def load_audio(file, sr, DoFormant, Quefrency, Timbre):
+def load_audio(file, sr, DoFormant=False, Quefrency=1.0, Timbre=1.0):
     converted = False
-    DoFormant, Quefrency, Timbre = CSVutil('csvdb/formanting.csv', 'r', 'formanting')    
     try:
         file = (
             file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
         )
         file_formanted = file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
         
-        if (DoFormant.lower() == 'true'):
+        if DoFormant:
             numerator = round(random.uniform(1,4), 4)
-            
             if not file.endswith(".wav"):
-                
                 if not os.path.isfile(f"{file_formanted}.wav"):
                     converted = True
-                    #print(f"\nfile = {file}\n")
-                    #print(f"\nfile_formanted = {file_formanted}\n")
                     converting = (
                         ffmpeg.input(file_formanted, threads = 0)
-                        .output(f"{RQuote(file_formanted)}.wav")
+                        .output(f"{file_formanted}.wav")
                         .run(
                             cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True
                         )
                     )
-                else:
-                    pass
             file_formanted = f"{file_formanted}.wav" if not file_formanted.endswith(".wav") else file_formanted
-            
             print(f" · Formanting {file_formanted}...\n")
             
             command = (
-                f'{RQuote(stft)} -i "{RQuote(file_formanted)}" -q "{RQuote(Quefrency)}" '
-                f'-t "{RQuote(Timbre)}" -o "{RQuote(file_formanted)}FORMANTED_{RQuote(str(numerator))}.wav"'
+                f'{stft} -i "{file_formanted}" -q "{Quefrency}" '
+                f'-t "{Timbre}" -o "{file_formanted}FORMANTED_{str(numerator)}.wav"'
             )
+
             os.system(command)
             
             print(f" · Formanted {file_formanted}!\n")
@@ -112,16 +80,12 @@ def load_audio(file, sr, DoFormant, Quefrency, Timbre):
 
 def check_audio_duration(file):
     try:
-        # Strip whitespaces and unnecessary characters from the file name
         file = file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
 
-        # Probe the audio file for information
         probe = ffmpeg.probe(file)
 
-        # Extract the duration from the probe result
         duration = float(probe['streams'][0]['duration'])
 
-        # If the duration is less than 0.75 seconds, print the message and exit the loop
         if duration < 0.76:
             print(
                 f"\n------------\n"

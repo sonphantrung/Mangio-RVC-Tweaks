@@ -8,8 +8,18 @@ import pyworld, os, traceback, faiss, librosa, torchcrepe
 from scipy import signal
 from functools import lru_cache
 
+from multiprocessing import Pool
+from functools import partial
+import re
+
 now_dir = os.getcwd()
 sys.path.append(now_dir)
+
+from LazyImport import lazyload
+
+torchcrepe = lazyload("torchcrepe")  # Fork Feature. Crepe algo for training and preprocess
+torch = lazyload("torch")
+rmvpe = lazyload("rmvpe")
 
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
 
@@ -61,6 +71,7 @@ class VC(object):
             config.x_max,
             config.is_half,
         )
+        
         self.sr = 16000  # hubert输入采样率
         self.window = 160  # 每帧点数
         self.t_pad = self.sr * self.x_pad  # 每条前后pad时间
@@ -70,18 +81,27 @@ class VC(object):
         self.t_center = self.sr * self.x_center  # 查询切点位置
         self.t_max = self.sr * self.x_max  # 免查询时长阈值
         self.device = config.device
+        self.model_rmvpe = rmvpe.RMVPE("rmvpe.pt", is_half=False, device="cuda:0")
+        self.f0_method_dict = {
+            "pm": self.get_pm,
+            "harvest": self.get_harvest,
+            "dio": self.get_dio,
+            "rmvpe": self.get_rmvpe,
+            "crepe": self.get_f0_official_crepe_computation,
+            "crepe-tiny": partial(self.get_f0_official_crepe_computation, model='model'),
+            "mangio-crepe": self.get_f0_crepe_computation,
+            "mangio-crepe-tiny": partial(self.get_f0_crepe_computation, model='model'),
+            
+        }
 
     # Fork Feature: Get the best torch device to use for f0 algorithms that require a torch device. Will return the type (torch.device)
     def get_optimal_torch_device(self, index: int = 0) -> torch.device:
-        # Get cuda device
         if torch.cuda.is_available():
             return torch.device(
                 f"cuda:{index % torch.cuda.device_count()}"
             )  # Very fast
         elif torch.backends.mps.is_available():
             return torch.device("mps")
-        # Insert an else here to grab "xla" devices if available. TO DO later. Requires the torch_xla.core.xla_model library
-        # Else wise return the "cpu" as a torch device,
         return torch.device("cpu")
 
     # Fork Feature: Compute f0 with the crepe method
@@ -91,8 +111,8 @@ class VC(object):
         f0_min,
         f0_max,
         p_len,
-        hop_length=160,  # 512 before. Hop length changes the speed that the voice jumps to a different dramatic pitch. Lower hop lengths means more pitch accuracy but longer inference time.
-        model="full",  # Either use crepe-tiny "tiny" or crepe "full". Default is full
+        *args,  # 512 before. Hop length changes the speed that the voice jumps to a different dramatic pitch. Lower hop lengths means more pitch accuracy but longer inference time.
+        **kwargs,  # Either use crepe-tiny "tiny" or crepe "full". Default is full
     ):
         x = x.astype(
             np.float32
@@ -104,6 +124,8 @@ class VC(object):
         if audio.ndim == 2 and audio.shape[0] > 1:
             audio = torch.mean(audio, dim=0, keepdim=True).detach()
         audio = audio.detach()
+        hop_length = kwargs.get('hop_length', 160)
+        model = kwargs.get('model', 'full') 
         print("Initiating prediction with a crepe_hop_length of: " + str(hop_length))
         pitch: Tensor = torchcrepe.predict(
             audio,
@@ -127,18 +149,20 @@ class VC(object):
         )
         f0 = np.nan_to_num(target)
         return f0  # Resized f0
-
+    
     def get_f0_official_crepe_computation(
         self,
         x,
         f0_min,
         f0_max,
-        model="full",
+        *args,
+        **kwargs
     ):
         # Pick a batch size that doesn't cause memory errors on your gpu
         batch_size = 512
         # Compute pitch using first gpu
         audio = torch.tensor(np.copy(x))[None].float()
+        model = kwargs.get('model', 'full') 
         f0, pd = torchcrepe.predict(
             audio,
             self.sr,
@@ -163,6 +187,45 @@ class VC(object):
         f0 = f0[1:]  # Get rid of extra first frame
         return f0
 
+    def get_pm(self, x, p_len, *args, **kwargs):
+        f0 = parselmouth.Sound(x, self.sr).to_pitch_ac(
+            time_step=160 / 16000,
+            voicing_threshold=0.6,
+            pitch_floor=kwargs.get('f0_min'),
+            pitch_ceiling=kwargs.get('f0_max'),
+        ).selected_array["frequency"]
+        
+        return np.pad(
+            f0,
+            [[max(0, (p_len - len(f0) + 1) // 2), max(0, p_len - len(f0) - (p_len - len(f0) + 1) // 2)]],
+            mode="constant"
+        )
+
+    def get_harvest(self, x, *args, **kwargs):
+        f0_spectral = pyworld.harvest(
+            x.astype(np.double),
+            fs=self.sr,
+            f0_ceil=kwargs.get('f0_max'),
+            f0_floor=kwargs.get('f0_min'),
+            frame_period=1000 * kwargs.get('hop_length', 160) / self.sr,
+        )
+        return pyworld.stonemask(x.astype(np.double), *f0_spectral, self.sr)
+
+    def get_dio(self, x, *args, **kwargs):
+        f0_spectral = pyworld.dio(
+            x.astype(np.double),
+            fs=self.sr,
+            f0_ceil=kwargs.get('f0_max'),
+            f0_floor=kwargs.get('f0_min'),
+            frame_period=1000 * kwargs.get('hop_length', 160) / self.sr,
+        )
+        return pyworld.stonemask(x.astype(np.double), *f0_spectral, self.sr)
+
+
+    def get_rmvpe(self, x, *args, **kwargs):
+        return self.model_rmvpe.infer_from_audio(x, thred=0.03)
+
+
     # Fork Feature: Acquire median hybrid f0 estimation calculation
     def get_f0_hybrid_computation(
         self,
@@ -177,78 +240,35 @@ class VC(object):
         time_step,
     ):
         # Get various f0 methods from input to use in the computation stack
-        s = methods_str
-        s = s.split("hybrid")[1]
-        s = s.replace("[", "").replace("]", "")
-        methods = s.split("+")
+        params = {'x': x, 'p_len': p_len, 'f0_min': f0_min, 
+          'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
+          'crepe_hop_length': crepe_hop_length, 'model': "full"
+        }
+        methods_str = re.search('hybrid\[(.+)\]', methods_str)
+        if methods_str:  # Ensure a match was found
+            methods = [method.strip() for method in methods_str.group(1).split('+')]
         f0_computation_stack = []
 
-        print("Calculating f0 pitch estimations for methods: %s" % str(methods))
+        print(f"Calculating f0 pitch estimations for methods: {str(methods)}")
         x = x.astype(np.float32)
         x /= np.quantile(np.abs(x), 0.999)
         # Get f0 calculations for all methods specified
+
         for method in methods:
-            f0 = None
-            if method == "pm":
-                f0 = (
-                    parselmouth.Sound(x, self.sr)
-                    .to_pitch_ac(
-                        time_step=time_step / 1000,
-                        voicing_threshold=0.6,
-                        pitch_floor=f0_min,
-                        pitch_ceiling=f0_max,
-                    )
-                    .selected_array["frequency"]
-                )
-                pad_size = (p_len - len(f0) + 1) // 2
-                if pad_size > 0 or p_len - len(f0) - pad_size > 0:
-                    f0 = np.pad(
-                        f0, [[pad_size, p_len - len(f0) - pad_size]], mode="constant"
-                    )
-            elif method == "crepe":
-                f0 = self.get_f0_official_crepe_computation(x, f0_min, f0_max)
-                f0 = f0[1:]  # Get rid of extra first frame
-            elif method == "crepe-tiny":
-                f0 = self.get_f0_official_crepe_computation(x, f0_min, f0_max, "tiny")
-                f0 = f0[1:]  # Get rid of extra first frame
-            elif method == "mangio-crepe":
-                f0 = self.get_f0_crepe_computation(
-                    x, f0_min, f0_max, p_len, crepe_hop_length
-                )
-            elif method == "mangio-crepe-tiny":
-                f0 = self.get_f0_crepe_computation(
-                    x, f0_min, f0_max, p_len, crepe_hop_length, "tiny"
-                )
-            elif method == "harvest":
-                f0 = cache_harvest_f0(input_audio_path, self.sr, f0_max, f0_min, 10)
-                if filter_radius > 2:
-                    f0 = signal.medfilt(f0, 3)
-                f0 = f0[1:]  # Get rid of first frame.
-            elif method == "dio":  # Potentially buggy?
-                f0, t = pyworld.dio(
-                    x.astype(np.double),
-                    fs=self.sr,
-                    f0_ceil=f0_max,
-                    f0_floor=f0_min,
-                    frame_period=10,
-                )
-                f0 = pyworld.stonemask(x.astype(np.double), f0, t, self.sr)
+            if method not in self.f0_method_dict:
+                print(f"Method {method} not found.")
+                continue
+            f0 = self.f0_method_dict[method](**params)
+            if method == 'harvest' and filter_radius > 2:
                 f0 = signal.medfilt(f0, 3)
-                f0 = f0[1:]
-            # elif method == "pyin": Not Working just yet
-            #    f0 = self.get_f0_pyin_computation(x, f0_min, f0_max)
-            # Push method to the stack
+                f0 = f0[1:]  # Get rid of first frame.
             f0_computation_stack.append(f0)
 
         for fc in f0_computation_stack:
             print(len(fc))
 
-        print("Calculating hybrid median f0 from the stack of: %s" % str(methods))
-        f0_median_hybrid = None
-        if len(f0_computation_stack) == 1:
-            f0_median_hybrid = f0_computation_stack[0]
-        else:
-            f0_median_hybrid = np.nanmedian(f0_computation_stack, axis=0)
+        print(f"Calculating hybrid median f0 from the stack of: {str(methods)}")
+        f0_median_hybrid = np.nanmedian(f0_computation_stack, axis=0)
         return f0_median_hybrid
 
     def get_f0(
@@ -268,64 +288,18 @@ class VC(object):
         f0_max = 1100
         f0_mel_min = 1127 * np.log(1 + f0_min / 700)
         f0_mel_max = 1127 * np.log(1 + f0_max / 700)
-        if f0_method == "pm":
-            f0 = (
-                parselmouth.Sound(x, self.sr)
-                .to_pitch_ac(
-                    time_step=time_step / 1000,
-                    voicing_threshold=0.6,
-                    pitch_floor=f0_min,
-                    pitch_ceiling=f0_max,
-                )
-                .selected_array["frequency"]
-            )
-            pad_size = (p_len - len(f0) + 1) // 2
-            if pad_size > 0 or p_len - len(f0) - pad_size > 0:
-                f0 = np.pad(
-                    f0, [[pad_size, p_len - len(f0) - pad_size]], mode="constant"
-                )
-        elif f0_method == "harvest":
-            input_audio_path2wav[input_audio_path] = x.astype(np.double)
-            f0 = cache_harvest_f0(input_audio_path, self.sr, f0_max, f0_min, 10)
-            if filter_radius > 2:
-                f0 = signal.medfilt(f0, 3)
-        elif f0_method == "dio":  # Potentially Buggy?
-            f0, t = pyworld.dio(
-                x.astype(np.double),
-                fs=self.sr,
-                f0_ceil=f0_max,
-                f0_floor=f0_min,
-                frame_period=10,
-            )
-            f0 = pyworld.stonemask(x.astype(np.double), f0, t, self.sr)
-            f0 = signal.medfilt(f0, 3)
-        elif f0_method == "crepe":
-            f0 = self.get_f0_official_crepe_computation(x, f0_min, f0_max)
-        elif f0_method == "crepe-tiny":
-            f0 = self.get_f0_official_crepe_computation(x, f0_min, f0_max, "tiny")
-        elif f0_method == "mangio-crepe":
-            f0 = self.get_f0_crepe_computation(
-                x, f0_min, f0_max, p_len, crepe_hop_length
-            )
-        elif f0_method == "mangio-crepe-tiny":
-            f0 = self.get_f0_crepe_computation(
-                x, f0_min, f0_max, p_len, crepe_hop_length, "tiny"
-            )
-        elif f0_method == "rmvpe":
-            if hasattr(self, "model_rmvpe") == False:
-                from rmvpe import RMVPE
+        params = {'x': x, 'p_len': p_len, 'f0_up_key': f0_up_key, 'f0_min': f0_min, 
+          'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
+          'crepe_hop_length': crepe_hop_length, 'model': "full"
+        }
 
-                print("loading rmvpe model")
-                self.model_rmvpe = RMVPE(
-                    "rmvpe.pt", is_half=self.is_half, device=self.device
-                )
-            f0 = self.model_rmvpe.infer_from_audio(x, thred=0.03)
+        f0 = self.f0_method_dict[f0_method](**params)
 
-        elif "hybrid" in f0_method:
+        if "hybrid" in f0_method:
             # Perform hybrid median pitch estimation
             input_audio_path2wav[input_audio_path] = x.astype(np.double)
             f0 = self.get_f0_hybrid_computation(
-                f0_method,
+                f0_method,+
                 input_audio_path,
                 x,
                 f0_min,
@@ -464,6 +438,39 @@ class VC(object):
         times[2] += t2 - t1
         return audio1
 
+    def process_t(self, t, s, window, audio_pad, pitch, pitchf, times, index, big_npy, index_rate, version, protect, t_pad_tgt, if_f0, sid, model, net_g):
+        t = t // window * window
+        if if_f0 == 1:
+            return self.vc(
+                model,
+                net_g,
+                sid,
+                audio_pad[s : t + t_pad_tgt + window],
+                pitch[:, s // window : (t + t_pad_tgt) // window],
+                pitchf[:, s // window : (t + t_pad_tgt) // window],
+                times,
+                index,
+                big_npy,
+                index_rate,
+                version,
+                protect,
+            )[t_pad_tgt : -t_pad_tgt]
+        else:
+            return self.vc(
+                model,
+                net_g,
+                sid,
+                audio_pad[s : t + t_pad_tgt + window],
+                None,
+                None,
+                times,
+                index,
+                big_npy,
+                index_rate,
+                version,
+                protect,
+            )[t_pad_tgt : -t_pad_tgt]
+
     def pipeline(
         self,
         model,
@@ -487,22 +494,18 @@ class VC(object):
         crepe_hop_length,
         f0_file=None,
     ):
-        if (
-            file_index != ""
-            # and file_big_npy != ""
-            # and os.path.exists(file_big_npy) == True
-            and os.path.exists(file_index) == True
-            and index_rate != 0
-        ):
+        index_exists = os.path.exists(file_index)
+        if file_index and index_rate and index_exists:
             try:
                 index = faiss.read_index(file_index)
-                # big_npy = np.load(file_big_npy)
                 big_npy = index.reconstruct_n(0, index.ntotal)
-            except:
+            except Exception:
                 traceback.print_exc()
                 index = big_npy = None
         else:
+            # To avoid reassigning in case of missing file
             index = big_npy = None
+
         audio = signal.filtfilt(bh, ah, audio)
         audio_pad = np.pad(audio, (self.window // 2, self.window // 2), mode="reflect")
         opt_ts = []
@@ -557,43 +560,13 @@ class VC(object):
             pitchf = torch.tensor(pitchf, device=self.device).unsqueeze(0).float()
         t2 = ttime()
         times[1] += t2 - t1
-        for t in opt_ts:
-            t = t // self.window * self.window
-            if if_f0 == 1:
-                audio_opt.append(
-                    self.vc(
-                        model,
-                        net_g,
-                        sid,
-                        audio_pad[s : t + self.t_pad2 + self.window],
-                        pitch[:, s // self.window : (t + self.t_pad2) // self.window],
-                        pitchf[:, s // self.window : (t + self.t_pad2) // self.window],
-                        times,
-                        index,
-                        big_npy,
-                        index_rate,
-                        version,
-                        protect,
-                    )[self.t_pad_tgt : -self.t_pad_tgt]
-                )
-            else:
-                audio_opt.append(
-                    self.vc(
-                        model,
-                        net_g,
-                        sid,
-                        audio_pad[s : t + self.t_pad2 + self.window],
-                        None,
-                        None,
-                        times,
-                        index,
-                        big_npy,
-                        index_rate,
-                        version,
-                        protect,
-                    )[self.t_pad_tgt : -self.t_pad_tgt]
-                )
-            s = t
+        pool_size = 4
+        with Pool(processes=pool_size) as pool:
+            args = (s, self.window, audio_pad, pitch, pitchf, times, index, big_npy, index_rate, version, 
+                    protect, self.t_pad_tgt, if_f0, sid, model, net_g)
+            process_t_partial = partial(self.process_t, *args)
+            audio_opt = pool.map(process_t_partial, opt_ts)
+        t2 = ttime()
         if if_f0 == 1:
             audio_opt.append(
                 self.vc(

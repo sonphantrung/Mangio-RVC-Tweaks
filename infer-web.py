@@ -2,13 +2,12 @@ import sys
 from shutil import rmtree
 import json # Mangio fork using json for preset saving
 
-
 from glob import glob1
 from signal import SIGTERM
 import os
 now_dir = os.getcwd()
 sys.path.append(now_dir)
-
+import lib.globals.globals as rvc_globals
 from LazyImport import lazyload
 
 math = lazyload('math')
@@ -43,7 +42,7 @@ from lib.infer_pack.models import (
 from lib.infer_pack.models_onnx import SynthesizerTrnMsNSFsidM
 from infer_uvr5 import _audio_pre_, _audio_pre_new
 from MDXNet import MDXNetDereverb
-from my_utils import load_audio, CSVutil
+from my_utils import load_audio
 from train.process_ckpt import change_info, extract_small_model, merge, show_info
 from vc_infer_pipeline import VC
 from sklearn.cluster import MiniBatchKMeans
@@ -73,19 +72,16 @@ os.environ["TEMP"] = tmp
 warnings.filterwarnings("ignore")
 torch.manual_seed(114514)
 logging.getLogger("numba").setLevel(logging.WARNING)
-
-os.makedirs('csvdb/', exist_ok=True)
-with open('csvdb/formanting.csv', 'a'): pass
-with open('csvdb/stop.csv', 'a'): pass
+try:
+    file = open('csvdb/stop.csv', 'x')
+    file.close()
+except FileExistsError: pass
 
 global DoFormant, Quefrency, Timbre
 
-try:
-    DoFormant, Quefrency, Timbre = CSVutil('csvdb/formanting.csv', 'r', 'formanting')
-    DoFormant = DoFormant.lower() == 'true'
-except (ValueError, TypeError, IndexError):
-    DoFormant, Quefrency, Timbre = False, 1.0, 1.0
-    CSVutil('csvdb/formanting.csv', 'w+', 'formanting', DoFormant, Quefrency, Timbre)
+DoFormant = rvc_globals.DoFormant
+Quefrency = rvc_globals.Quefrency
+Timbre = rvc_globals.Timbre
 
 config = Config()
 i18n = I18nAuto()
@@ -123,20 +119,21 @@ def load_hubert():
 
     hubert_model.eval()
 
-
+datasets_root = "datasets"
 weight_root = "weights"
 weight_uvr5_root = "uvr5_weights"
-index_root = "./logs/"
+index_root = "logs"
+fshift_root = "formantshiftcfg"
 audio_root = "audios"
 
 names = [name for name in os.listdir(weight_root) if name.endswith((".pth", ".onnx"))]
 
-indexes_list = [f"{root}/{name}"
+indexes_list = [os.path.join(root, name)
                for root, _, files in os.walk(index_root, topdown=False) 
                for name in files 
                if name.endswith(".index") and "trained" not in name]
 
-audio_paths = [f"{root}/{name}"
+audio_paths = [os.path.join(root, name)
                for root, _, files in os.walk(audio_root, topdown=False) 
                for name in files]
 
@@ -148,8 +145,8 @@ check_for_name = lambda: sorted(names)[0] if names else ''
 
 def get_indexes():
     indexes_list = [
-        os.path.join(dirpath, filename).replace('\\', '/')
-        for dirpath, _, filenames in os.walk("./logs/")
+        os.path.join(dirpath, filename)
+        for dirpath, _, filenames in os.walk(index_root)
         for filename in filenames
         if filename.endswith(".index") and "trained" not in filename
     ]
@@ -158,8 +155,8 @@ def get_indexes():
 
 def get_fshift_presets():
     fshift_presets_list = [
-        os.path.join(dirpath, filename).replace('\\', '/')
-        for dirpath, _, filenames in os.walk("./formantshiftcfg/")
+        os.path.join(dirpath, filename)
+        for dirpath, _, filenames in os.walk(fshift_root)
         for filename in filenames
         if filename.endswith(".txt")
     ]
@@ -175,7 +172,6 @@ def vc_single(
     f0_method,
     file_index,
     file_index2,
-    # file_big_npy,
     index_rate,
     filter_radius,
     resample_sr,
@@ -191,7 +187,7 @@ def vc_single(
     
     try:
         reliable_path = input_audio_path1 if input_audio_path0 == '' else input_audio_path0
-        audio = load_audio(reliable_path, 16000, DoFormant, Quefrency, Timbre)
+        audio = load_audio(reliable_path, 16000, DoFormant=DoFormant, Quefrency=Quefrency, Timbre=Timbre)
         
         audio_max = np.abs(audio).max() / 0.95
         if audio_max > 1:
@@ -200,8 +196,9 @@ def vc_single(
         times = [0, 0, 0]
         if not hubert_model:
             load_hubert()
-            
+        
         if_f0 = cpt.get("f0", 1)
+        
         file_index = (
             file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
         ) if file_index != "" else file_index2
@@ -393,9 +390,9 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
 
 
 def change_choices():
-    names = [name for name in os.listdir(weight_root) if name.endswith(".pth", ".onnx")]
+    names = [name for name in os.listdir(weight_root) if name.endswith((".pth", ".onnx"))]
     indexes_list = [os.path.join(root, name) for root, _, files in os.walk(index_root, topdown=False) for name in files if name.endswith(".index") and "trained" not in name]
-    audio_paths = [os.path.join(audio_root, file) for file in os.listdir(os.path.join(os.getcwd(), "audios"))]
+    audio_paths = [os.path.join(audio_root, file) for file in os.listdir(os.path.join(now_dir, "audios"))]
 
     return (
         {"choices": sorted(names), "__type__": "update"}, 
@@ -421,12 +418,17 @@ def if_done_multi(done, ps):
         time.sleep(0.5)
     done[0] = True
 
-def formant_enabled(cbox, qfrency, tmbre, frmntapply, formantpreset, formant_refresh_button):
+def formant_enabled(cbox, qfrency, tmbre):
+    global DoFormant, Quefrency, Timbre
 
-    global DoFormant
     DoFormant = cbox
-    
-    CSVutil('csvdb/formanting.csv', 'w+', 'formanting', DoFormant, qfrency, tmbre)
+    Quefrency = qfrency
+    Timbre = tmbre
+
+    rvc_globals.DoFormant = cbox
+    rvc_globals.Quefrency = qfrency
+    rvc_globals.Timbre = tmbre
+
     visibility_update = {"visible": DoFormant, "__type__": "update"}
 
     return (
@@ -441,7 +443,9 @@ def formant_apply(qfrency, tmbre):
     Timbre = tmbre
     DoFormant = True
 
-    CSVutil('csvdb/formanting.csv', 'w+', 'formanting', DoFormant, Quefrency, Timbre)
+    rvc_globals.DoFormant = True
+    rvc_globals.Quefrency = qfrency
+    rvc_globals.Timbre = tmbre
 
     return ({"value": Quefrency, "__type__": "update"}, {"value": Timbre, "__type__": "update"})
 
@@ -618,6 +622,8 @@ def set_log_interval(exp_dir, batch_size12):
 
     return log_interval
 
+global PID, PROCESS
+
 def click_train(
     exp_dir1,
     sr2,
@@ -634,9 +640,7 @@ def click_train(
     if_save_every_weights18,
     version19,
 ):
-    
-    CSVutil('csvdb/stop.csv', 'w+', 'formanting', False)
-
+    with open('csvdb/stop.csv', 'w+') as file: file.write("False")
     log_dir = os.path.join(now_dir, "logs", exp_dir1)
     
     os.makedirs(log_dir, exist_ok=True)
@@ -845,8 +849,10 @@ def cli_infer(com):
     else:
         Quefrency, Timbre = map(float, cli_split_command(com)[15:17])
 
-    CSVutil('csvdb/formanting.csv', 'w+', 'formanting', do_formant.lower() == 'true', Quefrency, Timbre)
-    
+    rvc_globals.DoFormant = do_formant.lower() == 'true'
+    rvc_globals.Quefrency = Quefrency
+    rvc_globals.Timbre = Timbre
+
     output_message = 'Mangio-RVC-Fork Infer-CLI:'
     output_path = f'audio-outputs/{output_file_name}'
     
@@ -960,6 +966,7 @@ def preset_apply(preset, qfer, tmbr):
 @jit(nopython=True)
 def print_page_details():
     page_description = {
+
         'HOME':
             "\n    go home            : Takes you back to home with a navigation list."
             "\n    go infer           : Takes you to inference command execution."
@@ -968,6 +975,7 @@ def print_page_details():
             "\n    go train           : Takes you to training step.3) being or continue training command execution."
             "\n    go train-feature   : Takes you to the train feature index command execution."
             "\n    go extract-model   : Takes you to the extract small model command execution."
+
         , 'INFER': 
             "\n    arg 1) model name with .pth in ./weights: mi-test.pth"
             "\n    arg 2) source audio path: myFolder\\MySource.wav"
@@ -986,12 +994,14 @@ def print_page_details():
             "\n    arg 15)* Quefrency for formanting: 8.0 (no need to set if arg14 is False/false)"
             "\n    arg 16)* Timbre for formanting: 1.2 (no need to set if arg14 is False/false) \n"
             "\nExample: mi-test.pth saudio/Sidney.wav myTest.wav logs/mi-test/added_index.index 0 -2 harvest 160 3 0 1 0.95 0.33 0.45 True 8.0 1.2"
+
         , 'PRE-PROCESS':
             "\n    arg 1) Model folder name in ./logs: mi-test"
             "\n    arg 2) Trainset directory: mydataset (or) E:\\my-data-set"
             "\n    arg 3) Sample rate: 40k (32k, 40k, 48k)"
             "\n    arg 4) Number of CPU threads to use: 8 \n"
             "\nExample: mi-test mydataset 40k 24"
+
         , 'EXTRACT-FEATURE':
             "\n    arg 1) Model folder name in ./logs: mi-test"
             "\n    arg 2) Gpu card slot: 0 (0-1-2 if using 3 GPUs)"
@@ -1001,6 +1011,7 @@ def print_page_details():
             "\n    arg 6) Crepe hop length: 128"
             "\n    arg 7) Version for pre-trained models: v2 (use either v1 or v2)\n"
             "\nExample: mi-test 0 24 1 harvest 128 v2"
+
         , 'TRAIN':
             "\n    arg 1) Model folder name in ./logs: mi-test"
             "\n    arg 2) Sample rate: 40k (32k, 40k, 48k)"
@@ -1015,10 +1026,12 @@ def print_page_details():
             "\n    arg 11) Save extracted small model every generation?: 0 (0 for no, 1 for yes)"
             "\n    arg 12) Model architecture version: v2 (use either v1 or v2)\n"
             "\nExample: mi-test 40k 1 0 50 10000 8 0 0 0 0 v2"
+
         , 'TRAIN-FEATURE':
             "\n    arg 1) Model folder name in ./logs: mi-test"
             "\n    arg 2) Model architecture version: v2 (use either v1 or v2)\n"
             "\nExample: mi-test v2"
+
         , 'EXTRACT-MODEL':
             "\n    arg 1) Model Path: logs/mi-test/G_168000.pth"
             "\n    arg 2) Model save name: MyModel"
@@ -1027,7 +1040,9 @@ def print_page_details():
             '\n    arg 5) Model information: "My Model"'
             "\n    arg 6) Model architecture version: v2 (use either v1 or v2)\n"
             '\nExample: logs/mi-test/G_168000.pth MyModel 40k 1 "Created by Cole Mangio" v2'
+
     }
+    
     print(page_description.get(cli_current_page, 'Invalid page'))
 
 
@@ -1098,26 +1113,25 @@ def get_presets():
 
 def match_index(sid0):
     folder = sid0.split('.')[0].split('_')[0]
-    parent_dir = "./logs/" + folder
+    parent_dir = os.path.join(index_root, folder)
     if not os.path.exists(parent_dir):
         return '', ''
     
     for filename in os.listdir(parent_dir):    
         if filename.endswith(".index"):
-            index_path = os.path.join(parent_dir, filename).replace('\\','/')
-            print(index_path)
+            index_path = os.path.join(parent_dir, filename)
             if index_path in indexes_list:
                 return index_path, index_path
 
-            lowered_index_path = os.path.join(parent_dir.lower(), filename).replace('\\','/')
+            lowered_index_path = os.path.join(parent_dir.lower(), filename)
             if lowered_index_path in indexes_list:
                 return lowered_index_path, lowered_index_path
     return '', ''
 
-def stoptraining(mim): 
+def stoptraining(mim):
     if mim:
         try:
-            CSVutil('csvdb/stop.csv', 'w+', 'stop', 'True')
+            with open('csvdb/stop.csv', 'w+') as file: file.write("True")
             os.kill(PID, SIGTERM)
         except Exception as e:
             print(f"Couldn't click due to {e}")
@@ -1179,7 +1193,7 @@ def GradioSetup():
                             )
                             input_audio0 = gr.Textbox(
                                 label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
-                                value=os.path.abspath(os.getcwd()).replace('\\', '/') + "/audios/" + "audio.wav",
+                                value=os.path.join(now_dir, "audios", "audio.wav"),
                             )
                             input_audio1 = gr.Dropdown(
                                 label=i18n("Auto detect audio path and select from the dropdown:"),
@@ -1328,7 +1342,7 @@ def GradioSetup():
                             
                             formant_preset.change(fn=preset_apply, inputs=[formant_preset, qfrency, tmbre], outputs=[qfrency, tmbre])
                             frmntbut = gr.Button("Apply", variant="primary", visible=bool(DoFormant))
-                            formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
+                            formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
                             frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
                             formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
                             
@@ -1443,7 +1457,7 @@ def GradioSetup():
                         with gr.Column():
                             dir_input = gr.Textbox(
                                 label=i18n("输入待处理音频文件夹路径(去文件管理器地址栏拷就行了)"),
-                                value=os.path.abspath(os.getcwd()).replace('\\', '/') + "/audios/",
+                                value=os.path.join(now_dir, "audios"),
                             )
                             inputs = gr.File(
                                 file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
@@ -1506,7 +1520,7 @@ def GradioSetup():
                         with gr.Column():
                             dir_wav_input = gr.Textbox(
                                 label=i18n("输入待处理音频文件夹路径"),
-                                value=((os.getcwd()).replace('\\', '/') + "/audios/")
+                                value=os.path.join(now_dir, "audios")
                             )
                             wav_inputs = gr.File(
                                 file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
@@ -1591,7 +1605,7 @@ def GradioSetup():
                     )
                     with gr.Row():
                         trainset_dir4 = gr.Textbox(
-                            label=i18n("输入训练文件夹路径"), value=os.path.abspath(os.getcwd()) + "\\datasets\\"
+                            label=i18n("输入训练文件夹路径"), value=os.path.join(now_dir, datasets_root)
                         )
                         spk_id5 = gr.Slider(
                             minimum=0,
@@ -1958,7 +1972,7 @@ def GradioSetup():
                         ckpt_path2 = gr.Textbox(
                             lines=3,
                             label=i18n("模型路径"),
-                            value=os.path.abspath(os.getcwd()).replace('\\', '/') + "/logs/[YOUR_MODEL]/G_23333.pth",
+                            value=os.path.join(now_dir, "logs", "[YOUR_MODEL]", "G_23333.pth"),
                             interactive=True,
                         )
                         save_name = gr.Textbox(
@@ -2154,6 +2168,7 @@ def GradioSetup():
                 inbrowser=not config.noautoopen,
                 server_port=config.listen_port,
                 quiet=False,
+                share=False,
             )
 
 #endregion

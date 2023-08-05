@@ -7,8 +7,8 @@ from multiprocessing import cpu_count
 global usefp16
 usefp16 = False
 
-
-def use_fp32_config():
+def decide_fp_config():
+    global usefp16
     usefp16 = False
     device_capability = 0
     if torch.cuda.is_available():
@@ -68,7 +68,6 @@ def use_fp32_config():
             "CUDA is not available. Make sure you have an NVIDIA GPU and CUDA installed."
         )
     return (usefp16, device_capability)
-
 
 class Config:
     def __init__(self):
@@ -155,7 +154,7 @@ class Config:
                 self.is_half = False
             else:
                 print("Found GPU", self.gpu_name)
-                use_fp32_config()
+                decide_fp_config()
             self.gpu_mem = int(
                 torch.cuda.get_device_properties(i_device).total_memory
                 / 1024
@@ -169,15 +168,15 @@ class Config:
                 with open("trainset_preprocess_pipeline_print.py", "w") as f:
                     f.write(strr)
         elif self.has_mps():
-            print("No supported Nvidia GPU found, use MPS instead")
+            print("No supported Nvidia GPU found, using MPS instead")
             self.device = "mps"
             self.is_half = False
-            use_fp32_config()
+            decide_fp_config()
         else:
-            print("No supported Nvidia GPU found, use CPU instead")
+            print("No supported Nvidia GPU found, using CPU instead")
             self.device = "cpu"
             self.is_half = False
-            use_fp32_config()
+            decide_fp_config()
 
         if self.n_cpu == 0:
             self.n_cpu = cpu_count()
