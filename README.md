@@ -1,3 +1,9 @@
+# 8/6 Changelog
+- Completely rewrote code for training related stripts, `train_nsf_sim_cache_sid_load_pretrain.py`, `trainset_preprocess_pipeline_print.py`, etc
+- Got rid of CSV database (mostly, still use STOP.csv cause Popen is trash and can't access a global var file when it is changed, for some reason)
+- Training is faster now (cool)
+- Now auto-indexing involves path like `logs/MODEL/INDEX`, not `./logs/MODEL/INDEX`
+
 # 8/1 Changelog
 - Completely rewrote the code for `infer-web.py` to be more optimized.
 - Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough to train with (0.76s)
