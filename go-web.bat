@@ -1,4 +1,17 @@
-@echo off
-break on
-runtime\python.exe infer-web.py --pycmd runtime\python.exe --port 7897
+@ECHO OFF
+
+
+SETLOCAL
+
+
+SET PYCMD="runtime\python.exe"
+
+SET PORT="7897"
+
+SET THEME="JohnSmith9982/small_and_pretty"
+
+
+%PYCMD% infer-web.py --pycmd %PYCMD% --port %PORT% --theme %THEME%
+
+
 pause

@@ -84,6 +84,7 @@ class Config:
             self.noautoopen,
             self.paperspace,
             self.is_cli,
+            self.grtheme,
         ) = self.arg_parse()
 
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
@@ -113,6 +114,15 @@ class Config:
             action="store_true",
             help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!",
         )
+
+        parser.add_argument(
+                    "-t",
+                    "--theme",
+            help    = "Theme for Gradio. Format - `JohnSmith9982/small_and_pretty` (no backticks)",
+            default = "gradio/soft",
+            type    = str
+        )
+        
         cmd_opts = parser.parse_args()
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
@@ -125,6 +135,7 @@ class Config:
             cmd_opts.noautoopen,
             cmd_opts.paperspace,
             cmd_opts.is_cli,
+            cmd_opts.theme,
         )
 
     # has_mps is only available in nightly pytorch (for now) and MasOS 12.3+.

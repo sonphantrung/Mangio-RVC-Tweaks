@@ -1111,22 +1111,25 @@ def get_presets():
     return preset_names
 '''
 
-def match_index(sid0):
-    folder = sid0.split('.')[0].split('_')[0]
-    parent_dir = os.path.join(index_root, folder)
-    if not os.path.exists(parent_dir):
-        return '', ''
+def match_index(sid0: str) -> tuple:
+    sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
+    directories_to_search = []
+    sid_directory = os.path.join(index_root, sid0.split('.')[0].split('_')[0])
     
-    for filename in os.listdir(parent_dir):    
-        if filename.endswith(".index"):
-            index_path = os.path.join(parent_dir, filename)
-            if index_path in indexes_list:
-                return index_path, index_path
-
-            lowered_index_path = os.path.join(parent_dir.lower(), filename)
-            if lowered_index_path in indexes_list:
-                return lowered_index_path, lowered_index_path
-    return '', ''
+    if os.path.exists(sid_directory):
+        directories_to_search.append(sid_directory)
+    directories_to_search.append(index_root)
+    for directory in directories_to_search:
+        for filename in os.listdir(directory):
+            if (filename.endswith(".index") and "trained" not in filename 
+                and (sid0strip in filename 
+                     or sid0strip.lower() in filename 
+                     or sid0strip.upper() in filename)):
+                
+                index_path = os.path.join(directory, filename)
+                if index_path in indexes_list:
+                    return (index_path,) * 2
+    return (None,) * 2
 
 def stoptraining(mim):
     if mim:
@@ -1135,18 +1138,19 @@ def stoptraining(mim):
             os.kill(PID, SIGTERM)
         except Exception as e:
             print(f"Couldn't click due to {e}")
+        return (
+            {"visible": True , "__type__": "update"},
+            {"visible": False, "__type__": "update"})
     return (
-        {"visible": False, "__type__": "update"}, 
-        {"visible": True, "__type__": "update"},
-    )
+        {"visible": False, "__type__": "update"},
+        {"visible": True , "__type__": "update"})
 
 tab_faq = i18n("常见问题解答")
 faq_file = "docs/faq.md" if tab_faq == "常见问题解答" else "docs/faq_en.md"
 weights_dir = 'weights/'
 
-def GradioSetup():
-    #Change your Gradio Theme here. 👇 👇 👇 👇 Example: " theme='HaleyCH/HaleyCH_Theme' "
-    with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
+def GradioSetup(UTheme=gr.themes.Soft()):
+    with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
         gr.Markdown(
             value=i18n(
@@ -1156,15 +1160,6 @@ def GradioSetup():
         with gr.Tabs():
             
             with gr.TabItem(i18n("模型推理")):
-                # Inference Preset Row
-                # with gr.Row():
-                #     mangio_preset = gr.Dropdown(label="Inference Preset", choices=sorted(get_presets()))
-                #     mangio_preset_name_save = gr.Textbox(
-                #         label="Your preset name"
-                #     )
-                #     mangio_preset_save_btn = gr.Button('Save Preset', variant="primary")
-
-                # Other RVC stuff
                 with gr.Row():
                     
                     sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
@@ -1250,19 +1245,9 @@ def GradioSetup():
                                 interactive=True,
                                 allow_custom_value=True,
                                 )
-                            #sid0.select(fn=match_index, inputs=sid0, outputs=file_index2)
-                            
-                            
-
-                            
                             refresh_button.click(
                                 fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
                                 )
-                            # file_big_npy1 = gr.Textbox(
-                            #     label=i18n("特征文件路径"),
-                            #     value="E:\\codes\py39\\vits_vc_gpu_train\\logs\\mi-test-1key\\total_fea.npy",
-                            #     interactive=True,
-                            # )
                             index_rate1 = gr.Slider(
                                 minimum=0,
                                 maximum=1,
@@ -1362,7 +1347,6 @@ def GradioSetup():
                                 f0method0,
                                 file_index1,
                                 file_index2,
-                                # file_big_npy1,
                                 index_rate1,
                                 filter_radius0,
                                 resample_sr0,
@@ -1390,7 +1374,6 @@ def GradioSetup():
                                 value="rmvpe",
                                 interactive=True,
                             )
-                            
                             filter_radius1 = gr.Slider(
                                 minimum=0,
                                 maximum=7,
@@ -1416,11 +1399,6 @@ def GradioSetup():
                                 inputs=[],
                                 outputs=file_index4,
                             )
-                            # file_big_npy2 = gr.Textbox(
-                            #     label=i18n("特征文件路径"),
-                            #     value="E:\\codes\\py39\\vits_vc_gpu_train\\logs\\mi-test-1key\\total_fea.npy",
-                            #     interactive=True,
-                            # )
                             index_rate2 = gr.Slider(
                                 minimum=0,
                                 maximum=1,
@@ -1597,7 +1575,7 @@ def GradioSetup():
                         value=int(np.ceil(config.n_cpu / 1.5)),
                         interactive=True,
                     )
-                with gr.Group():  # 暂时单人的, 后面支持最多4人的#数据处理
+                with gr.Group():
                     gr.Markdown(
                         value=i18n(
                             "step2a: 自动遍历训练文件夹下所有可解码成音频的文件并进行切片归一化, 在实验目录下生成2个wav文件夹; 暂时只支持单人训练. "
@@ -1756,11 +1734,10 @@ def GradioSetup():
                         )
                         but3 = gr.Button(i18n("训练模型"), variant="primary", visible=True)
                         but3.click(fn=stoptraining, inputs=[gr.Number(value=0, visible=False)], outputs=[but3, butstop])
-                        butstop.click(fn=stoptraining, inputs=[gr.Number(value=1, visible=False)], outputs=[butstop, but3])
+                        butstop.click(fn=stoptraining, inputs=[gr.Number(value=1, visible=False)], outputs=[but3, butstop])
                         
                         
                         but4 = gr.Button(i18n("训练特征索引"), variant="primary")
-                        #but5 = gr.Button(i18n("一键训练"), variant="primary")
                         info3 = gr.Textbox(label=i18n("输出信息"), value="", max_lines=10)
                         
                         if_save_every_weights18.change(
@@ -1796,33 +1773,6 @@ def GradioSetup():
                         )
                             
                         but4.click(train_index, [exp_dir1, version19], info3)
-                        
-                        
-                        
-                        #but5.click(
-                        #    train1key,
-                        #    [
-                        #        exp_dir1,
-                        #        sr2,
-                        #        if_f0_3,
-                        #        trainset_dir4,
-                        #        spk_id5,
-                        #        np7,
-                        #        f0method8,
-                        #        save_epoch10,
-                        #        total_epoch11,
-                        #        batch_size12,
-                        #        if_save_latest13,
-                        #        pretrained_G14,
-                        #        pretrained_D15,
-                        #        gpus16,
-                        #        if_cache_gpu17,
-                        #        if_save_every_weights18,
-                        #        version19,
-                        #        extraction_crepe_hop_length
-                        #    ],
-                        #    info3,
-                        #)
                 with gr.Group():
 
                     gr.Markdown(value=
@@ -2174,4 +2124,4 @@ def GradioSetup():
 #endregion
 
 if __name__ == "__main__":
-    GradioSetup()
+    GradioSetup(UTheme=config.grtheme)
