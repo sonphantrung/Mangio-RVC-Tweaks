@@ -301,17 +301,17 @@ Then click the tensorboard link it provides and refresh the data.
 ## Change Gradio Theme:
 
 - [OPTIONAL] Change Gradio's theme:
-    1. Go to [Gradio Theme Gallery](https://huggingface.co/spaces/gradio/theme-gallery):
+  1. Go to [Gradio Theme Gallery](https://huggingface.co/spaces/gradio/theme-gallery):
        
-    2.1 Select any theme you like (e.g. [this one](https://huggingface.co/spaces/freddyaboulton/dracula_revamped))
+  2. Select any theme you like (e.g. [this one](https://huggingface.co/spaces/freddyaboulton/dracula_revamped))
   
-    2.2 Look at the top of the page
+  3. Look at the top of the page
   
     ![image](https://github.com/alexlnkp/Mangio-RVC-Tweaks/assets/79400603/59e3e6a9-bdda-4ede-8161-00ee957c1715)
 
-    2.3 Copy theme variable(in this case, it's `theme='freddyaboulton/dracula_revamped'`)
+  4. Copy theme variable(in this case, it's `theme='freddyaboulton/dracula_revamped'`)
   
-    3. Replace the THEME variable in the `go-web.bat` file with chosen theme. In this case, make it like this: `SET THEME="freddyaboulton/dracula_revamped"`
+  5. Replace the THEME variable in the `go-web.bat` file with chosen theme. In this case, make it like this: `SET THEME="freddyaboulton/dracula_revamped"`
 
 
 # Formant Shift Explanation
