@@ -12,10 +12,13 @@ $props = @{
     THEME = "gradio/soft" # Modify accordigly to change Gradio theme
 }
 
+Write-Host "Current Settings:`n"
 # Display the current settings
 $props.GetEnumerator() | ForEach-Object { 
     Write-Host ("{0}: {1}" -f $_.Name, $_.Value)
 }
+
+Write-Host ""
 
 # Run Python script using properties as arguments
 & $props.PYCMD infer-web.py --pycmd $props.PYCMD --port $props.PORT --theme $props.THEME

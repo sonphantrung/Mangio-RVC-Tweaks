@@ -123,7 +123,7 @@ class VC(object):
         if audio.ndim == 2 and audio.shape[0] > 1:
             audio = torch.mean(audio, dim=0, keepdim=True).detach()
         audio = audio.detach()
-        hop_length = kwargs.get('hop_length', 160)
+        hop_length = kwargs.get('crepe_hop_length', 160)
         model = kwargs.get('model', 'full') 
         print("Initiating prediction with a crepe_hop_length of: " + str(hop_length))
         pitch: Tensor = torchcrepe.predict(
@@ -291,7 +291,7 @@ class VC(object):
           'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
           'crepe_hop_length': crepe_hop_length, 'model': "full"
         }
-
+        print(f"params_chl - {params['crepe_hop_length']}, original_chl - {crepe_hop_length}")
         f0 = self.f0_method_dict[f0_method](**params)
 
         if "hybrid" in f0_method:
@@ -323,7 +323,7 @@ class VC(object):
             f0[self.x_pad * tf0 : self.x_pad * tf0 + len(replace_f0)] = replace_f0[
                 :shape
             ]
-        # with open("test_opt.txt","w")as f:f.write("\n".join([str(i)for i in f0.tolist()]))
+        
         f0bak = f0.copy()
         f0_mel = 1127 * np.log(1 + f0 / 700)
         f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (

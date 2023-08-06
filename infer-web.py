@@ -1114,22 +1114,27 @@ def get_presets():
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
     base_model_name = sid0strip.rsplit('_', 2)[0]
-    directories_to_search = []
     sid_directory = os.path.join(index_root, base_model_name)
     
-    if os.path.exists(sid_directory):
-        directories_to_search.append(sid_directory)
+    directories_to_search = [sid_directory] if os.path.exists(sid_directory) else []
     directories_to_search.append(index_root)
 
-    for directory in directories_to_search:
-        valid_files = [filename for filename in os.listdir(directory) if filename.endswith('.index') and 'trained' not in filename]
-        index_files = list(filter(lambda filename: any(name.lower() in filename.lower() for name in [sid0strip, base_model_name]), valid_files))
+    matching_index_files = []
 
-        for index_file in index_files:
-            index_path = os.path.join(directory, index_file)
-            if index_path in indexes_list:
-                return (index_path,) * 2
-    return (None,) * 2
+    for directory in directories_to_search:
+        for filename in os.listdir(directory):
+            if filename.endswith('.index') and 'trained' not in filename and any(name.lower() in filename.lower() for name in [sid0strip, base_model_name]):
+                index_path = os.path.join(directory, filename)
+                if index_path in indexes_list:
+                    matching_index_files.append((index_path, os.path.getsize(index_path), ' ' not in filename))
+
+    if matching_index_files:
+        # Sort by favoring files without spaces and by size (largest size first)
+        matching_index_files.sort(key=lambda x: (-x[2], -x[1]))
+        best_match_index_path = matching_index_files[0][0]
+        return best_match_index_path, best_match_index_path
+                
+    return None, None
 
 def stoptraining(mim):
     if mim:
@@ -1283,7 +1288,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             )
                             formanting = gr.Checkbox(
                                 value=bool(DoFormant),
-                                label="[EXPERIMENTAL] Formant shift inference audio",
+                                label="Formant shift inference audio",
                                 info="Used for male to female and vice-versa conversions",
                                 interactive=True,
                                 visible=True,
