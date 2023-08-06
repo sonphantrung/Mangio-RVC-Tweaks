@@ -178,13 +178,21 @@ def vc_single(
     rms_mix_rate,
     protect,
     crepe_hop_length,
+    f0_min,
+    note_min,
+    f0_max,
+    note_max,
 ):
     global tgt_sr, net_g, vc, hubert_model, version
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
-    
+
     f0_up_key = int(f0_up_key)
     
+    if rvc_globals.NotesOrHertz:
+        f0_min, f0_max = note_to_hz(note_min), note_to_hz(note_max)
+        print(f"converted min pitch - {f0_min}\nconverted max pitch - {f0_max}")
+
     try:
         reliable_path = input_audio_path1 if input_audio_path0 == '' else input_audio_path0
         audio = load_audio(reliable_path, 16000, DoFormant=DoFormant, Quefrency=Quefrency, Timbre=Timbre)
@@ -223,6 +231,8 @@ def vc_single(
             protect,
             crepe_hop_length,
             f0_file=f0_file,
+            f0_min=f0_min,
+            f0_max=f0_max
         )
         
         if tgt_sr != resample_sr >= 16000:
@@ -235,7 +245,6 @@ def vc_single(
         info = traceback.format_exc()
         print(info)
         return info, (None, None)
-
 
 def vc_multi(
     sid,
@@ -254,7 +263,14 @@ def vc_multi(
     protect,
     format1,
     crepe_hop_length,
+    f0_min,
+    note_min,
+    f0_max,
+    note_max,
 ):
+    if rvc_globals.NotesOrHertz:
+        f0_min, f0_max = note_to_hz(note_min), note_to_hz(note_max)
+        print(f"converted min pitch - {f0_min}\nconverted max pitch - {f0_max}")
     try:
         dir_path, opt_root = [x.strip(" ").strip('"').strip("\n").strip('"').strip(" ") for x in [dir_path, opt_root]]
         os.makedirs(opt_root, exist_ok=True)
@@ -262,7 +278,9 @@ def vc_multi(
         infos = []
 
         for path in paths:
-            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate, filter_radius, resample_sr, rms_mix_rate, protect, crepe_hop_length)
+            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate,
+                                  filter_radius, resample_sr, rms_mix_rate, protect, crepe_hop_length, f0_min, f0_max,)
+            
             if "Success" in info:
                 try:
                     tgt_sr, audio_opt = opt
@@ -1111,6 +1129,24 @@ def get_presets():
     return preset_names
 '''
 
+def switch_pitch_controls(f0method0):
+    is_visible = f0method0 != 'rmvpe'
+
+    if rvc_globals.NotesOrHertz:
+        return (
+            {"visible": False, "__type__": "update"},
+            {"visible": is_visible, "__type__": "update"},
+            {"visible": False, "__type__": "update"},
+            {"visible": is_visible, "__type__": "update"}
+        )
+    else:
+        return (
+            {"visible": is_visible, "__type__": "update"},
+            {"visible": False, "__type__": "update"},
+            {"visible": is_visible, "__type__": "update"},
+            {"visible": False, "__type__": "update"}
+        )
+
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
     base_model_name = sid0strip.rsplit('_', 2)[0]
@@ -1154,6 +1190,14 @@ tab_faq = i18n("常见问题解答")
 faq_file = "docs/faq.md" if tab_faq == "常见问题解答" else "docs/faq_en.md"
 weights_dir = 'weights/'
 
+def note_to_hz(note_name):
+    SEMITONES = {'C': -9, 'C#': -8, 'D': -7, 'D#': -6, 'E': -5, 'F': -4, 'F#': -3, 'G': -2, 'G#': -1, 'A': 0, 'A#': 1, 'B': 2}
+    pitch_class, octave = note_name[:-1], int(note_name[-1])
+    semitone = SEMITONES[pitch_class]
+    note_number = 12 * (octave - 4) + semitone
+    frequency = 440.0 * (2.0 ** (1.0/12)) ** note_number
+    return frequency
+
 def GradioSetup(UTheme=gr.themes.Soft()):
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
@@ -1163,7 +1207,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
             )
         )
         with gr.Tabs():
-            
             with gr.TabItem(i18n("模型推理")):
                 with gr.Row():
                     
@@ -1206,7 +1249,9 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 label=i18n(
                                     "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                                 ),
-                                choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe"], # Fork Feature. Add Crepe-Tiny
+                                choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "alexrmvpe"], 
+                                # [ MANGIO ]: Fork Feature. Added Crepe-Tiny.
+                                # [ALEXLNKP]: Fork Feature. Added ALEXRMVPE.
                                 value="rmvpe",
                                 interactive=True,
                             )
@@ -1219,16 +1264,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 interactive=True,
                                 visible=False,
                             )
-                            f0method0.change(
-                                fn=lambda radio: (
-                                    {
-                                        "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
-                                        "__type__": "update"
-                                    }
-                                ),
-                                inputs=[f0method0],
-                                outputs=[crepe_hop_length]
-                            )
+                            
                             filter_radius0 = gr.Slider(
                                 minimum=0,
                                 maximum=7,
@@ -1260,6 +1296,66 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 value=0.75,
                                 interactive=True,
                             )
+                            
+                            with gr.Accordion(label = "f0 [Root pitch] File", open = False):
+                                f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
+                            with gr.Column():
+                                minpitch_slider = gr.Slider(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 50,
+                                    maximum     = 48000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                minpitch_txtbox = gr.Textbox(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C5",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
+                                )
+
+                                maxpitch_slider = gr.Slider(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 1100,
+                                    maximum     = 48000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                maxpitch_txtbox = gr.Textbox(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C6",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
+                                )
+
+                            f0method0.change(
+                                fn=lambda radio: (
+                                    {
+                                        "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
+                                        "__type__": "update"
+                                    }
+                                ),
+                                inputs=[f0method0],
+                                outputs=[crepe_hop_length]
+                            )
+
+                            f0method0.change(
+                                fn=switch_pitch_controls,
+                                inputs=[f0method0],
+                                outputs=[minpitch_slider, minpitch_txtbox,
+                                         maxpitch_slider, maxpitch_txtbox]
+                            )
+
                         with gr.Column():
                             resample_sr0 = gr.Slider(
                                 minimum=0,
@@ -1329,18 +1425,22 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 visible=bool(DoFormant),
                                 interactive=True,
                             )
-                            
-                            formant_preset.change(fn=preset_apply, inputs=[formant_preset, qfrency, tmbre], outputs=[qfrency, tmbre])
                             frmntbut = gr.Button("Apply", variant="primary", visible=bool(DoFormant))
-                            formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
-                            frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
-                            formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
-                            
-                        f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
-                        but0 = gr.Button(i18n("转换"), variant="primary")
-                        with gr.Row():
-                            vc_output1 = gr.Textbox(label=i18n("输出信息"))
-                            vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
+
+                        formant_preset.change(fn=preset_apply, inputs=[formant_preset, qfrency, tmbre], outputs=[qfrency, tmbre])
+                        
+                        formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
+                        frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
+                        formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
+                        
+                        but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
+                
+                with gr.Row():
+                    vc_output1 = gr.Textbox(label=i18n("输出信息"))
+                    vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
+
+                with gr.Group():
+                    with gr.Row():
                         but0.click(
                             vc_single,
                             [
@@ -1357,7 +1457,9 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 resample_sr0,
                                 rms_mix_rate0,
                                 protect0,
-                                crepe_hop_length
+                                crepe_hop_length,
+                                minpitch_slider, minpitch_txtbox,
+                                maxpitch_slider, maxpitch_txtbox,
                             ],
                             [vc_output1, vc_output2],
                         )
@@ -1393,7 +1495,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 value="",
                                 interactive=True,
                             )
-                            file_index4 = gr.Dropdown( #file index dropdown for batch
+                            file_index4 = gr.Dropdown(
                                 label=i18n("自动检测index路径,下拉式选择(dropdown)"),
                                 choices=get_indexes(),
                                 interactive=True,
@@ -1465,7 +1567,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 f0method1,
                                 file_index3,
                                 file_index4,
-                                # file_big_npy2,
                                 index_rate2,
                                 filter_radius1,
                                 resample_sr1,
@@ -1473,6 +1574,8 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 protect1,
                                 format1,
                                 crepe_hop_length,
+                                minpitch_slider if (not rvc_globals.NotesOrHertz) else minpitch_txtbox,
+                                maxpitch_slider if (not rvc_globals.NotesOrHertz) else maxpitch_txtbox,
                             ],
                             [vc_output3],
                         )
@@ -1507,7 +1610,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             )
                             wav_inputs = gr.File(
                                 file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
-                            ) #####
+                            )
                         with gr.Column():
                             model_choose = gr.Dropdown(label=i18n("模型"), choices=uvr5_names)
                             agg = gr.Slider(
@@ -1517,7 +1620,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 label="人声提取激进程度",
                                 value=10,
                                 interactive=True,
-                                visible=False,  # 先不开放调整
+                                visible=False,
                             )
                             opt_vocal_root = gr.Textbox(
                                 label=i18n("指定输出主人声文件夹"), value="opt"
@@ -1604,7 +1707,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             preprocess_dataset, [trainset_dir4, exp_dir1, sr2, np7], [info1]
                         )
                 with gr.Group():
-                    step2b = gr.Markdown(value=i18n("step2b: 使用CPU提取音高(如果模型带音高), 使用GPU提取特征(选择卡号)"))
+                    gr.Markdown(value=i18n("step2b: 使用CPU提取音高(如果模型带音高), 使用GPU提取特征(选择卡号)"))
                     with gr.Row():
                         with gr.Column():
                             gpus6 = gr.Textbox(
@@ -1612,13 +1715,14 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 value=gpus,
                                 interactive=True,
                             )
-                            gpu_info9 = gr.Textbox(label=i18n("显卡信息"), value=gpu_info)
+                            gr.Textbox(label=i18n("显卡信息"), value=gpu_info)
                         with gr.Column():
                             f0method8 = gr.Radio(
                                 label=i18n(
                                     "选择音高提取算法:输入歌声可用pm提速,高质量语音但CPU差可用dio提速,harvest质量更好但慢"
                                 ),
-                                choices=["pm", "harvest", "dio", "crepe", "mangio-crepe", "rmvpe"], # Fork feature: Crepe on f0 extraction for training.
+                                choices=["pm", "harvest", "dio", "crepe", "mangio-crepe", "rmvpe"],
+                                # [ MANGIO ]: Fork feature: Crepe on f0 extraction for training.
                                 value="rmvpe",
                                 interactive=True,
                             )
@@ -1779,7 +1883,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             
                         but4.click(train_index, [exp_dir1, version19], info3)
                 with gr.Group():
-
                     gr.Markdown(value=
                         'Step 4: Export lowest points on a graph of the model '
                         'After clicking on Export lowest points of a model, '
@@ -1977,6 +2080,27 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                 with gr.Row():
                     butOnnx = gr.Button(i18n("导出Onnx模型"), variant="primary")
                 butOnnx.click(export_onnx, [ckpt_dir, onnx_dir], infoOnnx)
+            
+            with gr.TabItem("Settings"):
+                with gr.Row():
+                    gr.Markdown(value=
+                                "Pitch settings"
+                                )
+                    noteshertz = gr.Checkbox(
+                        label       = "Whether to use note names instead of their hertz value. E.G. [C5, D6] instead of [523.25, 1174.66]Hz",
+                        value       = True,
+                        interactive = True,
+                    )
+            
+            noteshertz.change(fn=lambda nhertz: rvc_globals.__setattr__('NotesOrHertz', nhertz), inputs=[noteshertz], outputs=[])
+
+            noteshertz.change(
+                fn=switch_pitch_controls,
+                inputs=[f0method0],
+                outputs=[
+                    minpitch_slider, minpitch_txtbox,
+                    maxpitch_slider, maxpitch_txtbox,]
+            )
 
             with gr.TabItem(tab_faq):
                 try:
@@ -1985,7 +2109,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     gr.Markdown(value=info)
                 except:
                     gr.Markdown(traceback.format_exc())
-
 
         #region Mangio Preset Handler Region
         def save_preset(

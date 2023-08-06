@@ -12,10 +12,11 @@ $props = @{
     THEME = "gradio/soft" # Modify accordigly to change Gradio theme
 }
 
-Write-Host "Current Settings:`n"
+Write-Host "Current Settings:`n" -ForegroundColor Magenta
 # Display the current settings
 $props.GetEnumerator() | ForEach-Object { 
-    Write-Host ("{0}: {1}" -f $_.Name, $_.Value)
+    Write-Host ("{0}:" -f $_.Name) -NoNewline -ForegroundColor Green
+    Write-Host (" {0}" -f $_.Value) -ForegroundColor Cyan
 }
 
 Write-Host ""

@@ -86,6 +86,7 @@ class VC(object):
             "harvest": self.get_harvest,
             "dio": self.get_dio,
             "rmvpe": self.get_rmvpe,
+            "alexrmvpe": self.get_pitch_dependant_rmvpe,
             "crepe": self.get_f0_official_crepe_computation,
             "crepe-tiny": partial(self.get_f0_official_crepe_computation, model='model'),
             "mangio-crepe": self.get_f0_crepe_computation,
@@ -224,6 +225,8 @@ class VC(object):
     def get_rmvpe(self, x, *args, **kwargs):
         return self.model_rmvpe.infer_from_audio(x, thred=0.03)
 
+    def get_pitch_dependant_rmvpe(self, x, f0_min=1, f0_max=40000, *args, **kwargs):
+        return self.model_rmvpe.infer_from_audio_with_pitch(x, thred=0.03, f0_min=f0_min, f0_max=f0_max)
 
     # Fork Feature: Acquire median hybrid f0 estimation calculation
     def get_f0_hybrid_computation(
@@ -236,7 +239,7 @@ class VC(object):
         p_len,
         filter_radius,
         crepe_hop_length,
-        time_step,
+        time_step
     ):
         # Get various f0 methods from input to use in the computation stack
         params = {'x': x, 'p_len': p_len, 'f0_min': f0_min, 
@@ -280,18 +283,17 @@ class VC(object):
         filter_radius,
         crepe_hop_length,
         inp_f0=None,
+        f0_min=50,
+        f0_max=1100,
     ):
         global input_audio_path2wav
         time_step = self.window / self.sr * 1000
-        f0_min = 50
-        f0_max = 1100
         f0_mel_min = 1127 * np.log(1 + f0_min / 700)
         f0_mel_max = 1127 * np.log(1 + f0_max / 700)
         params = {'x': x, 'p_len': p_len, 'f0_up_key': f0_up_key, 'f0_min': f0_min, 
           'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
           'crepe_hop_length': crepe_hop_length, 'model': "full"
         }
-        print(f"params_chl - {params['crepe_hop_length']}, original_chl - {crepe_hop_length}")
         f0 = self.f0_method_dict[f0_method](**params)
 
         if "hybrid" in f0_method:
@@ -472,7 +474,7 @@ class VC(object):
 
     def pipeline(self, model, net_g, sid, audio, input_audio_path, times, f0_up_key, f0_method,
             file_index, index_rate, if_f0, filter_radius, tgt_sr, resample_sr, rms_mix_rate,
-            version, protect, crepe_hop_length, f0_file=None):
+            version, protect, crepe_hop_length, f0_file=None, f0_min=50, f0_max=1100):
         try:
             index = faiss.read_index(file_index)
             big_npy = index.reconstruct_n(0, index.ntotal)
@@ -514,7 +516,10 @@ class VC(object):
         pitch, pitchf = None, None
 
         if if_f0:
-            pitch, pitchf = self.get_f0(input_audio_path, audio_pad, p_len, f0_up_key, f0_method, filter_radius, crepe_hop_length, inp_f0)
+            pitch, pitchf = self.get_f0(
+                input_audio_path, audio_pad, p_len, f0_up_key, f0_method,
+                filter_radius, crepe_hop_length, inp_f0, f0_min, f0_max)
+            
             pitch = pitch[:p_len].astype(np.int64 if self.device != 'mps' else np.float32)
             pitchf = pitchf[:p_len].astype(np.float32)
             pitch = torch.from_numpy(pitch).to(self.device).unsqueeze(0)
