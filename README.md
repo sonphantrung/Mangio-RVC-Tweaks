@@ -3,7 +3,7 @@
 - Got rid of CSV database (mostly, still use STOP.csv cause Popen is trash and can't access a global var file when it is changed, for some reason)
 - Training is faster now (cool)
 - Now auto-indexing involves path like `logs/MODEL/INDEX`, not `./logs/MODEL/INDEX`
-- Now you can specify desired Gradio theme without trying to find it in `infer-web.py`! Just open the `go-web.bat` file and modify `THEME` variable to any theme you want. e.g. `SET THEME="JohnSmith9982/small_and_pretty"`
+- Now you can specify desired Gradio theme without trying to find it in `infer-web.py`! For detailed instructions view `go-web.bat` file.
 
 # 8/1 Changelog
 - Completely rewrote the code for `infer-web.py` to be more optimized.
@@ -301,23 +301,17 @@ Then click the tensorboard link it provides and refresh the data.
 ## Change Gradio Theme:
 
 - [OPTIONAL] Change Gradio's theme:
-    1. Open `infer-web.py` in any code/text editing software (e.g. `notepad++`, `notepad`, `vscode`, etc)
-  
-    2a. Press Ctrl+F and search for `with gr.Blocks(`, select the one that's not fully commented
-  
-    2b. Go to line `1842`, you'll see the `with gr.Blocks(theme='HaleyCH/HaleyCH_Theme') as app:`
-  
-    3. Go to [Gradio Theme Gallery](https://huggingface.co/spaces/gradio/theme-gallery):
+  1. Go to [Gradio Theme Gallery](https://huggingface.co/spaces/gradio/theme-gallery):
        
-    3.1 Select any theme you like (e.g. [this one](https://huggingface.co/spaces/freddyaboulton/dracula_revamped))
+  2. Select any theme you like (e.g. [this one](https://huggingface.co/spaces/freddyaboulton/dracula_revamped))
   
-    3.2 Look at the top of the page
+  3. Look at the top of the page
   
     ![image](https://github.com/alexlnkp/Mangio-RVC-Tweaks/assets/79400603/59e3e6a9-bdda-4ede-8161-00ee957c1715)
 
-    3.3 Copy theme variable(in this case, it's `theme='freddyaboulton/dracula_revamped'`)
+  4. Copy theme variable(in this case, it's `theme='freddyaboulton/dracula_revamped'`)
   
-    4. Replace `theme='HaleyCH/HaleyCH_Theme'` in `infer-web.py` with any value of a theme from [Gradio Theme Gallery](https://huggingface.co/spaces/gradio/theme-gallery)
+  5. Replace the THEME variable in the `go-web.bat` file with chosen theme. In this case, make it like this: `SET THEME="freddyaboulton/dracula_revamped"`
 
 
 # Formant Shift Explanation
