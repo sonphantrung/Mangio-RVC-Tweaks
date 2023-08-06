@@ -3,6 +3,7 @@
 - Got rid of CSV database (mostly, still use STOP.csv cause Popen is trash and can't access a global var file when it is changed, for some reason)
 - Training is faster now (cool)
 - Now auto-indexing involves path like `logs/MODEL/INDEX`, not `./logs/MODEL/INDEX`
+- Now you can specify desired Gradio theme without trying to find it in `infer-web.py`! Just open the `go-web.bat` file and modify `THEME` variable to any theme you want. e.g. `SET THEME="JohnSmith9982/small_and_pretty"`
 
 # 8/1 Changelog
 - Completely rewrote the code for `infer-web.py` to be more optimized.
