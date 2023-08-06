@@ -1113,22 +1113,22 @@ def get_presets():
 
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
+    base_model_name = sid0strip.rsplit('_', 2)[0]
     directories_to_search = []
-    sid_directory = os.path.join(index_root, sid0.split('.')[0].split('_')[0])
+    sid_directory = os.path.join(index_root, base_model_name)
     
     if os.path.exists(sid_directory):
         directories_to_search.append(sid_directory)
     directories_to_search.append(index_root)
+
     for directory in directories_to_search:
-        for filename in os.listdir(directory):
-            if (filename.endswith(".index") and "trained" not in filename 
-                and (sid0strip in filename 
-                     or sid0strip.lower() in filename 
-                     or sid0strip.upper() in filename)):
-                
-                index_path = os.path.join(directory, filename)
-                if index_path in indexes_list:
-                    return (index_path,) * 2
+        valid_files = [filename for filename in os.listdir(directory) if filename.endswith('.index') and 'trained' not in filename]
+        index_files = list(filter(lambda filename: any(name.lower() in filename.lower() for name in [sid0strip, base_model_name]), valid_files))
+
+        for index_file in index_files:
+            index_path = os.path.join(directory, index_file)
+            if index_path in indexes_list:
+                return (index_path,) * 2
     return (None,) * 2
 
 def stoptraining(mim):
