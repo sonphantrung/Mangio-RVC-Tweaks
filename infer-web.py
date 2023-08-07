@@ -126,18 +126,26 @@ index_root = "logs"
 fshift_root = "formantshiftcfg"
 audio_root = "audios"
 
-names = [name for name in os.listdir(weight_root) if name.endswith((".pth", ".onnx"))]
+sup_audioext = {'wav', 'mp3', 'flac', 'ogg', 'opus',
+                'm4a', 'mp4', 'aac', 'alac', 'wma',
+                'aiff', 'webm', 'ac3'}
+
+names        = [os.path.join(root, file)
+               for root, _, files in os.walk(weight_root)
+               for file in files
+               if file.endswith((".pth", ".onnx"))]
 
 indexes_list = [os.path.join(root, name)
                for root, _, files in os.walk(index_root, topdown=False) 
                for name in files 
                if name.endswith(".index") and "trained" not in name]
 
-audio_paths = [os.path.join(root, name)
+audio_paths  = [os.path.join(root, name)
                for root, _, files in os.walk(audio_root, topdown=False) 
-               for name in files]
+               for name in files
+               if name.endswith(tuple(sup_audioext))]
 
-uvr5_names = [name.replace(".pth", "") 
+uvr5_names  = [name.replace(".pth", "") 
               for name in os.listdir(weight_uvr5_root) 
               if name.endswith(".pth") or "onnx" in name]
 
@@ -190,9 +198,13 @@ def vc_single(
     f0_up_key = int(f0_up_key)
     
     if rvc_globals.NotesOrHertz:
-        f0_min, f0_max = note_to_hz(note_min), note_to_hz(note_max)
-        print(f"converted min pitch - {f0_min}\nconverted max pitch - {f0_max}")
-
+        f0_min = note_to_hz(note_min) if note_min else 50
+        f0_max = note_to_hz(note_max) if note_max else 1100
+        print(f"Converted min pitch freq - {f0_min}\n"
+              f"Converted max pitch freq - {f0_max}")
+    else:
+        f0_min = f0_min or 50
+        f0_max = f0_max or 1100
     try:
         reliable_path = input_audio_path1 if input_audio_path0 == '' else input_audio_path0
         audio = load_audio(reliable_path, 16000, DoFormant=DoFormant, Quefrency=Quefrency, Timbre=Timbre)
@@ -376,9 +388,8 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
             cpt = None
         return ({"visible": False, "__type__": "update"},) * 3
 
-    person = f"{weight_root}/{sid}"
-    print(f"loading {person}")
-    cpt = torch.load(person, map_location="cpu")
+    print(f"loading {sid}")
+    cpt = torch.load(sid, map_location="cpu")
     tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
 
@@ -408,9 +419,12 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
 
 
 def change_choices():
-    names = [name for name in os.listdir(weight_root) if name.endswith((".pth", ".onnx"))]
+    names        = [os.path.join(root, file)
+                   for root, _, files in os.walk(weight_root)
+                   for file in files
+                   if file.endswith((".pth", ".onnx"))]
     indexes_list = [os.path.join(root, name) for root, _, files in os.walk(index_root, topdown=False) for name in files if name.endswith(".index") and "trained" not in name]
-    audio_paths = [os.path.join(audio_root, file) for file in os.listdir(os.path.join(now_dir, "audios"))]
+    audio_paths  = [os.path.join(audio_root, file) for file in os.listdir(os.path.join(now_dir, "audios"))]
 
     return (
         {"choices": sorted(names), "__type__": "update"}, 
@@ -1149,6 +1163,9 @@ def switch_pitch_controls(f0method0):
 
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
+
+    sid0strip = os.path.split(sid0strip)[-1]
+
     base_model_name = sid0strip.rsplit('_', 2)[0]
     sid_directory = os.path.join(index_root, base_model_name)
     
