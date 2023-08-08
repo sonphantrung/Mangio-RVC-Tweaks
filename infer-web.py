@@ -172,24 +172,24 @@ def get_fshift_presets():
     return fshift_presets_list if fshift_presets_list else ''
 
 def vc_single(
-    sid,
-    input_audio_path0,
-    input_audio_path1,
-    f0_up_key,
-    f0_file,
-    f0_method,
-    file_index,
-    file_index2,
-    index_rate,
-    filter_radius,
-    resample_sr,
-    rms_mix_rate,
-    protect,
-    crepe_hop_length,
-    f0_min,
-    note_min,
-    f0_max,
-    note_max,
+    sid:               str,
+    input_audio_path0: str,
+    input_audio_path1: str,
+    f0_up_key:         int,
+    f0_file:           str,
+    f0_method:         str,
+    file_index:        str,
+    file_index2:       str,
+    index_rate:        float,
+    filter_radius:     int,
+    resample_sr:       int,
+    rms_mix_rate:      float,
+    protect:           float,
+    crepe_hop_length:  int,
+    f0_min:            int,
+    note_min:          str,
+    f0_max:            int,
+    note_max:          str,
 ):
     global tgt_sr, net_g, vc, hubert_model, version
     if not input_audio_path0 and not input_audio_path1:
@@ -197,7 +197,7 @@ def vc_single(
 
     f0_up_key = int(f0_up_key)
     
-    if rvc_globals.NotesOrHertz:
+    if rvc_globals.NotesOrHertz and f0_method != 'rmvpe':
         f0_min = note_to_hz(note_min) if note_min else 50
         f0_max = note_to_hz(note_max) if note_max else 1100
         print(f"Converted min pitch freq - {f0_min}\n"
@@ -206,8 +206,12 @@ def vc_single(
         f0_min = f0_min or 50
         f0_max = f0_max or 1100
     try:
-        reliable_path = input_audio_path1 if input_audio_path0 == '' else input_audio_path0
-        audio = load_audio(reliable_path, 16000, DoFormant=DoFormant, Quefrency=Quefrency, Timbre=Timbre)
+        input_audio_path1 = input_audio_path1 or input_audio_path0
+        audio = load_audio(input_audio_path1,
+                           16000,
+                           DoFormant=rvc_globals.DoFormant,
+                           Quefrency=rvc_globals.Quefrency,
+                           Timbre=rvc_globals.Timbre)
         
         audio_max = np.abs(audio).max() / 0.95
         if audio_max > 1:
