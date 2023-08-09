@@ -195,6 +195,9 @@ def vc_single(
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
 
+    if (not os.path.exists(input_audio_path0)) and (not os.path.exists(os.path.join(now_dir, input_audio_path0))):
+        return "Audio doesn't exist!!!!!!!!", None
+
     f0_up_key = int(f0_up_key)
     
     if rvc_globals.NotesOrHertz and f0_method != 'rmvpe':
@@ -1328,7 +1331,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     minimum     = 1,
                                     scale       = 0,
                                     value       = 50,
-                                    maximum     = 48000,
+                                    maximum     = 16000,
                                     interactive = True,
                                     visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
                                 )
@@ -1347,7 +1350,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     minimum     = 1,
                                     scale       = 0,
                                     value       = 1100,
-                                    maximum     = 48000,
+                                    maximum     = 16000,
                                     interactive = True,
                                     visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
                                 )
