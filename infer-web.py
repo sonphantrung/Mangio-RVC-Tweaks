@@ -1273,9 +1273,9 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 label=i18n(
                                     "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                                 ),
-                                choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "alexrmvpe"], 
+                                choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
                                 # [ MANGIO ]: Fork Feature. Added Crepe-Tiny.
-                                # [ALEXLNKP]: Fork Feature. Added ALEXRMVPE.
+                                # [ALEXLNKP]: Fork Feature. Added RMVPE+.
                                 value="rmvpe",
                                 interactive=True,
                             )

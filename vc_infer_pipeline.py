@@ -88,7 +88,7 @@ class VC(object):
             "harvest": self.get_harvest,
             "dio": self.get_dio,
             "rmvpe": self.get_rmvpe,
-            "alexrmvpe": self.get_pitch_dependant_rmvpe,
+            "rmvpe+": self.get_pitch_dependant_rmvpe,
             "crepe": self.get_f0_official_crepe_computation,
             "crepe-tiny": partial(self.get_f0_official_crepe_computation, model='model'),
             "mangio-crepe": self.get_f0_crepe_computation,
