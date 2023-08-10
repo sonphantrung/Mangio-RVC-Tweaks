@@ -1194,7 +1194,7 @@ def match_index(sid0: str) -> tuple:
         best_match_index_path = matching_index_files[0][0]
         return best_match_index_path, best_match_index_path
                 
-    return None, None
+    return '', ''
 
 def stoptraining(mim):
     if mim:
