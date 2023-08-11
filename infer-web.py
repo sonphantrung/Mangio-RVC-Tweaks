@@ -287,9 +287,15 @@ def vc_multi(
     f0_max,
     note_max,
 ):
-    if rvc_globals.NotesOrHertz:
-        f0_min, f0_max = note_to_hz(note_min), note_to_hz(note_max)
-        print(f"converted min pitch - {f0_min}\nconverted max pitch - {f0_max}")
+    if rvc_globals.NotesOrHertz and f0_method != 'rmvpe':
+        f0_min = note_to_hz(note_min) if note_min else 50
+        f0_max = note_to_hz(note_max) if note_max else 1100
+        print(f"Converted min pitch freq - {f0_min}\n"
+              f"Converted max pitch freq - {f0_max}")
+    else:
+        f0_min = f0_min or 50
+        f0_max = f0_max or 1100
+
     try:
         dir_path, opt_root = [x.strip(" ").strip('"').strip("\n").strip('"').strip(" ") for x in [dir_path, opt_root]]
         os.makedirs(opt_root, exist_ok=True)
@@ -297,8 +303,8 @@ def vc_multi(
         infos = []
 
         for path in paths:
-            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate,
-                                  filter_radius, resample_sr, rms_mix_rate, protect, crepe_hop_length, f0_min, f0_max,)
+            print("trying vc_single opt for batch infer")
+            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate, filter_radius, resample_sr, rms_mix_rate, protect, crepe_hop_length, f0_min, note_min, f0_max, note_max)
             
             if "Success" in info:
                 try:
