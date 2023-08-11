@@ -50,8 +50,6 @@ from sklearn.cluster import MiniBatchKMeans
 import time
 import threading
 
-from numba import jit
-
 from shlex import quote as SQuote
 
 RQuote = lambda val: SQuote(str(val))
@@ -299,13 +297,14 @@ def vc_multi(
     try:
         dir_path, opt_root = [x.strip(" ").strip('"').strip("\n").strip('"').strip(" ") for x in [dir_path, opt_root]]
         os.makedirs(opt_root, exist_ok=True)
+        
         paths = [os.path.join(dir_path, name) for name in os.listdir(dir_path)] if dir_path else [path.name for path in paths]
         infos = []
 
         for path in paths:
-            print("trying vc_single opt for batch infer")
-            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate, filter_radius, resample_sr, rms_mix_rate, protect, crepe_hop_length, f0_min, note_min, f0_max, note_max)
-            
+            info, opt = vc_single(sid, path, None, f0_up_key, None, f0_method, file_index, file_index2, index_rate, filter_radius,
+                                  resample_sr, rms_mix_rate, protect, crepe_hop_length, f0_min, note_min, f0_max, note_max)
+
             if "Success" in info:
                 try:
                     tgt_sr, audio_opt = opt
@@ -451,7 +450,6 @@ sr_dict = {
     "48k": 48000,
 }
 
-@jit
 def if_done(done, p):
     while p.poll() is None:
         time.sleep(0.5)
@@ -517,7 +515,6 @@ def preprocess_dataset(trainset_dir, exp_dir, sr, n_p):
     log_dir = os.path.join(now_dir, "logs", exp_dir)
     log_file = os.path.join(log_dir, "preprocess.log")
     
-
     os.makedirs(log_dir, exist_ok=True)
 
     with open(log_file, "w") as f: pass
@@ -615,7 +612,10 @@ def change_sr2(sr2, if_f0_3, version19):
 def change_version19(sr2, if_f0_3, version19):
     path_str = "" if version19 == "v1" else "_v2"
     sr2 = "40k" if (sr2 == "32k" and version19 == "v1") else sr2
-    choices_update = {"choices": ["40k", "48k"], "__type__": "update", "value": sr2} if version19 == "v1" else {"choices": ["40k", "48k", "32k"], "__type__": "update", "value": sr2}
+    choices_update = {
+        "choices": ["40k", "48k"], "__type__": "update", "value": sr2
+        } if version19 == "v1" else {
+            "choices": ["40k", "48k", "32k"], "__type__": "update", "value": sr2}
 
     f0_str = "f0" if if_f0_3 else ""
     model_paths = {"G": "", "D": ""}
@@ -883,7 +883,7 @@ def cli_split_command(com):
 execute_generator_function = lambda genObject: all(x is not None for x in genObject)
 
 def cli_infer(com):
-    model_name, source_audio_path, output_file_name, feature_index_path, speaker_id, transposition, f0_method, crepe_hop_length, harvest_median_filter, resample, mix, feature_ratio, protection_amnt, _, do_formant = cli_split_command(com)[:15]
+    model_name, source_audio_path, output_file_name, feature_index_path, speaker_id, transposition, f0_method, crepe_hop_length, harvest_median_filter, resample, mix, feature_ratio, protection_amnt, _, f0_min, f0_max, do_formant = cli_split_command(com)[:17]
 
     speaker_id, crepe_hop_length, harvest_median_filter, resample = map(int, [speaker_id, crepe_hop_length, harvest_median_filter, resample])
     transposition, mix, feature_ratio, protection_amnt = map(float, [transposition, mix, feature_ratio, protection_amnt])
@@ -892,7 +892,7 @@ def cli_infer(com):
         Quefrency = 1.0
         Timbre = 1.0
     else:
-        Quefrency, Timbre = map(float, cli_split_command(com)[15:17])
+        Quefrency, Timbre = map(float, cli_split_command(com)[17:19])
 
     rvc_globals.DoFormant = do_formant.lower() == 'true'
     rvc_globals.Quefrency = Quefrency
@@ -920,8 +920,12 @@ def cli_infer(com):
         resample,
         mix,
         protection_amnt,
-        crepe_hop_length
-    )        
+        crepe_hop_length,
+        f0_min=f0_min,
+        note_min=None,
+        f0_max=f0_max,
+        note_max=None
+    )
 
     if "Success." in conversion_data[0]:
         print(f"{output_message} Inference succeeded. Writing to {output_path}...")
@@ -1008,7 +1012,7 @@ def preset_apply(preset, qfer, tmbr):
             print("An unexpected error occurred", e)
 
     return ({"value": qfer, "__type__": "update"}, {"value": tmbr, "__type__": "update"})
-@jit(nopython=True)
+
 def print_page_details():
     page_description = {
 
@@ -1095,7 +1099,6 @@ def change_page(page):
     global cli_current_page
     cli_current_page = page
     return 0
-@jit
 def execute_command(com):
     command_to_page = {
         "go home": "HOME",
@@ -1831,13 +1834,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         pretrained_G14 = gr.Textbox(
                             lines=2,
                             label=i18n("加载预训练底模G路径"),
-                            value="pretrained/f0G40k.pth",
+                            value="pretrained_v2/f0G40k.pth",
                             interactive=True,
                         )
                         pretrained_D15 = gr.Textbox(
                             lines=2,
                             label=i18n("加载预训练底模D路径"),
-                            value="pretrained/f0D40k.pth",
+                            value="pretrained_v2/f0D40k.pth",
                             interactive=True,
                         )
                         sr2.change(
@@ -2139,147 +2142,23 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     gr.Markdown(value=info)
                 except:
                     gr.Markdown(traceback.format_exc())
+        return app
 
-        #region Mangio Preset Handler Region
-        def save_preset(
-            preset_name,
-            sid0,
-            vc_transform,
-            input_audio0,
-            input_audio1,
-            f0method,
-            crepe_hop_length,
-            filter_radius,
-            file_index1,
-            file_index2,
-            index_rate,
-            resample_sr,
-            rms_mix_rate,
-            protect,
-            f0_file
-        ):
-            data = None
-            with open('../inference-presets.json', 'r') as file:
-                data = json.load(file)
-            preset_json = {
-                'name': preset_name,
-                'model': sid0,
-                'transpose': vc_transform,
-                'audio_file': input_audio0,
-                'auto_audio_file': input_audio1,
-                'f0_method': f0method,
-                'crepe_hop_length': crepe_hop_length,
-                'median_filtering': filter_radius,
-                'feature_path': file_index1,
-                'auto_feature_path': file_index2,
-                'search_feature_ratio': index_rate,
-                'resample': resample_sr,
-                'volume_envelope': rms_mix_rate,
-                'protect_voiceless': protect,
-                'f0_file_path': f0_file
-            }
-            data['presets'].append(preset_json)
-            with open('../inference-presets.json', 'w') as file:
-                json.dump(data, file)
-                file.flush()
-            print("Saved Preset %s into inference-presets.json!" % preset_name)
+def GradioRun(app):
+    share_gradio_link = config.iscolab or config.paperspace
+    concurrency_count = 511
+    max_size = 1022
 
-
-        def on_preset_changed(preset_name):
-            print("Changed Preset to %s!" % preset_name)
-            data = None
-            with open('../inference-presets.json', 'r') as file:
-                data = json.load(file)
-
-            print("Searching for " + preset_name)
-            returning_preset = None
-            for preset in data['presets']:
-                if(preset['name'] == preset_name):
-                    print("Found a preset")
-                    returning_preset = preset
-            # return all new input values
-            return (
-                # returning_preset['model'],
-                # returning_preset['transpose'],
-                # returning_preset['audio_file'],
-                # returning_preset['f0_method'],
-                # returning_preset['crepe_hop_length'],
-                # returning_preset['median_filtering'],
-                # returning_preset['feature_path'],
-                # returning_preset['auto_feature_path'],
-                # returning_preset['search_feature_ratio'],
-                # returning_preset['resample'],
-                # returning_preset['volume_envelope'],
-                # returning_preset['protect_voiceless'],
-                # returning_preset['f0_file_path']
-            )
-
-        # Preset State Changes                
-        
-        # This click calls save_preset that saves the preset into inference-presets.json with the preset name
-        # mangio_preset_save_btn.click(
-        #     fn=save_preset, 
-        #     inputs=[
-        #         mangio_preset_name_save,
-        #         sid0,
-        #         vc_transform0,
-        #         input_audio0,
-        #         f0method0,
-        #         crepe_hop_length,
-        #         filter_radius0,
-        #         file_index1,
-        #         file_index2,
-        #         index_rate1,
-        #         resample_sr0,
-        #         rms_mix_rate0,
-        #         protect0,
-        #         f0_file
-        #     ], 
-        #     outputs=[]
-        # )
-
-        # mangio_preset.change(
-        #     on_preset_changed, 
-        #     inputs=[
-        #         # Pass inputs here
-        #         mangio_preset
-        #     ], 
-        #     outputs=[
-        #         # Pass Outputs here. These refer to the gradio elements that we want to directly change
-        #         # sid0,
-        #         # vc_transform0,
-        #         # input_audio0,
-        #         # f0method0,
-        #         # crepe_hop_length,
-        #         # filter_radius0,
-        #         # file_index1,
-        #         # file_index2,
-        #         # index_rate1,
-        #         # resample_sr0,
-        #         # rms_mix_rate0,
-        #         # protect0,
-        #         # f0_file
-        #     ]
-        # )
-        #endregion
-
-            # with gr.TabItem(i18n("招募音高曲线前端编辑器")):
-            #     gr.Markdown(value=i18n("加开发群联系我xxxxx"))
-            # with gr.TabItem(i18n("点击查看交流、问题反馈群号")):
-            #     gr.Markdown(value=i18n("xxxxx"))
-
-        if config.iscolab or config.paperspace: # Share gradio link for colab and paperspace (FORK FEATURE)
-            app.queue(concurrency_count=511, max_size=1022).launch(share=True)
-        else:
-            app.queue(concurrency_count=511, max_size=1022).launch(
-                server_name="0.0.0.0",
-                inbrowser=not config.noautoopen,
-                server_port=config.listen_port,
-                quiet=False,
-                share=False,
-            )
+    app.queue(concurrency_count=concurrency_count, max_size=max_size).launch(
+        server_name="0.0.0.0",
+        inbrowser=not config.noautoopen,
+        server_port=config.listen_port,
+        quiet=True,
+        share=share_gradio_link,
+    )
 
 #endregion
 
 if __name__ == "__main__":
-    GradioSetup(UTheme=config.grtheme)
+    app = GradioSetup(UTheme=config.grtheme)
+    GradioRun(app)
