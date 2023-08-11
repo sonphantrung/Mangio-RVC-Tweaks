@@ -1277,7 +1277,10 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 value='',
                                 interactive=True,
                             )
-                            input_audio1.change(fn=lambda:'',inputs=[],outputs=[input_audio0])
+                            input_audio1.select(fn=lambda:'',inputs=[],outputs=[input_audio0])
+
+                            input_audio0.input(fn=lambda:'',inputs=[],outputs=[input_audio1])
+
                             f0method0 = gr.Radio(
                                 label=i18n(
                                     "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
