@@ -14,7 +14,7 @@ onnxruntime_gpu==1.15.1
 opencv_python==4.8.0.74
 opencv_python_headless==4.8.0.74
 pandas==2.0.3
-parselmouth==1.1.1
+praat-parselmouth==0.4.2
 PySimpleGUI==4.60.5
 pyworld==0.3.3
 requests==2.31.0
