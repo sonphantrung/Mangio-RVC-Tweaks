@@ -1242,12 +1242,16 @@ def GradioSetup(UTheme=gr.themes.Soft()):
         )
         with gr.Tabs():
             with gr.TabItem(i18n("模型推理")):
+                with gr.Row():
+                    sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
+                    refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
+                
                 with gr.TabItem("Single"):
                     with gr.Row(): # Defines 'Refresh voice list'
                         
-                        sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
+
                         
-                        refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
+
                         #clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                         spk_item = gr.Slider(
                             minimum=0,
@@ -1261,9 +1265,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         #clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
 
                     with gr.Group(): # Defines whole single inference option section
-                        gr.Markdown(
-                            value=i18n("男转女推荐+12key, 女转男推荐-12key, 如果音域爆炸导致音色失真也可以自己调整到合适音域. ")
-                        )
                         with gr.Row():
                             with gr.Column():
                                 vc_transform0 = gr.Number(
@@ -1545,11 +1546,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive=True,
                                 )
                             with gr.Column():
-                                file_index3 = gr.Textbox(
-                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                    value="",
-                                    interactive=True,
-                                )
                                 file_index4 = gr.Dropdown(
                                     label=i18n("自动检测index路径,下拉式选择(dropdown)"),
                                     choices=get_indexes(),
@@ -1602,6 +1598,19 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 inputs = gr.File(
                                     file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
                                 )
+
+                            with gr.Row(): # Advanced settings tab (for batch) 
+                                with gr.Accordion(label = "Advanced Settings", open = False):
+                                    with gr.Column():
+                                        file_index3 = gr.Textbox(
+                                            label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                            value="",
+                                            interactive=True,
+                                        )
+
+                                    clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                                    clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+                            
                             with gr.Row():
                                 format1 = gr.Radio(
                                     label=i18n("导出文件格式"),
