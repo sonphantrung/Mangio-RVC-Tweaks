@@ -1,5 +1,6 @@
 import sys
 from shutil import rmtree
+import shutil
 import json # Mangio fork using json for preset saving
 
 from glob import glob1
@@ -228,29 +229,35 @@ def vc_single(
             file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
         ) if file_index != "" else file_index2
         
-        audio_opt = vc.pipeline(
-            hubert_model,
-            net_g,
-            sid,
-            audio,
-            input_audio_path1,
-            times,
-            f0_up_key,
-            f0_method,
-            file_index,
-            index_rate,
-            if_f0,
-            filter_radius,
-            tgt_sr,
-            resample_sr,
-            rms_mix_rate,
-            version,
-            protect,
-            crepe_hop_length,
-            f0_file=f0_file,
-            f0_min=f0_min,
-            f0_max=f0_max
-        )
+        try:
+            audio_opt = vc.pipeline(
+                hubert_model,
+                net_g,
+                sid,
+                audio,
+                input_audio_path1,
+                times,
+                f0_up_key,
+                f0_method,
+                file_index,
+                index_rate,
+                if_f0,
+                filter_radius,
+                tgt_sr,
+                resample_sr,
+                rms_mix_rate,
+                version,
+                protect,
+                crepe_hop_length,
+                f0_file=f0_file,
+                f0_min=f0_min,
+                f0_max=f0_max
+            )
+        except AssertionError:
+            message = "Mismatching index version detected (v1 with v2, or v2 with v1)."
+            print(message)
+            print("Specific error:", str(e))
+            return message, None
         
         if tgt_sr != resample_sr >= 16000:
             tgt_sr = resample_sr
@@ -1230,6 +1237,18 @@ def note_to_hz(note_name):
     note_number = 12 * (octave - 4) + semitone
     frequency = 440.0 * (2.0 ** (1.0/12)) ** note_number
     return frequency
+    
+def save_to_wav2(dropbox):
+    file_path=dropbox.name
+    shutil.move(file_path,'./audios')
+    return os.path.join('./audios',os.path.basename(file_path))
+    
+def change_choices2():
+    #audio_files=[]
+    #for filename in os.listdir("./audios"):
+        #if filename.endswith(('.wav','.mp3','.ogg','.flac','.m4a','.aac','.mp4')):
+            #audio_files.append(os.path.join('./audios',filename).replace('\\', '/'))
+    return ""
 
 def GradioSetup(UTheme=gr.themes.Soft()):
 
@@ -1262,6 +1281,8 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     with gr.Group(): # Defines whole single inference option section
                         with gr.Row():
                             with gr.Column(): # First column for audio-related inputs
+                          
+                                dropbox = gr.File(label="Drop your audio here & hit the Reload button.")
                                 input_audio0 = gr.Textbox(
                                     label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
                                     value=os.path.join(now_dir, "audios", "audio.wav"),
@@ -1275,6 +1296,9 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 
                                 input_audio1.select(fn=lambda:'',inputs=[],outputs=[input_audio0])
                                 input_audio0.input(fn=lambda:'',inputs=[],outputs=[input_audio1])
+                                
+                                dropbox.upload(fn=save_to_wav2, inputs=[dropbox], outputs=[input_audio0])
+                                dropbox.upload(fn=change_choices2, inputs=[], outputs=[input_audio1])
 
                             with gr.Column(): # Second column for pitch shift and other options
                                 vc_transform0 = gr.Number(
@@ -1306,21 +1330,21 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     
                     # Advanced settings container        
                     with gr.Column(visible=False) as advanced_settings: # Initially hidden
-                        with gr.Row(): # Advanced settings tab
-                            with gr.Accordion(label = "Advanced Settings", open = False):
-                                with gr.Column():
-                                    file_index1 = gr.Textbox(
-                                        label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                        value="",
-                                        interactive=True,
-                                    )
-                                
+                        with gr.Row(label = "Advanced Settings", open = False):
+                            with gr.Column():
+                                file_index1 = gr.Textbox(
+                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                    value="",
+                                    interactive=True,
+                                )
+                            
                                 with gr.Accordion(label = "f0 [Root pitch] File", open = False):
                                     f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
 
                                 clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                                 clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
-                                
+                            
+                            with gr.Column():
                                 f0method0 = gr.Radio(
                                     label=i18n(
                                         "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
@@ -1347,139 +1371,138 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive=True,
                                 )    
 
-                                with gr.Column():
-                                    minpitch_slider = gr.Slider(
-                                        label       = "Min pitch",
-                                        info        = "Specify minimal pitch for inference [HZ]",
-                                        step        = 0.1,
-                                        minimum     = 1,
-                                        scale       = 0,
-                                        value       = 50,
-                                        maximum     = 16000,
-                                        interactive = True,
-                                        visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                    )
-                                    minpitch_txtbox = gr.Textbox(
-                                        label       = "Min pitch",
-                                        info        = "Specify minimal pitch for inference [NOTE][OCTAVE]",
-                                        placeholder = "C5",
-                                        visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                        interactive = True,
-                                    )
-
-                                    maxpitch_slider = gr.Slider(
-                                        label       = "Max pitch",
-                                        info        = "Specify max pitch for inference [HZ]",
-                                        step        = 0.1,
-                                        minimum     = 1,
-                                        scale       = 0,
-                                        value       = 1100,
-                                        maximum     = 16000,
-                                        interactive = True,
-                                        visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                    )
-                                    maxpitch_txtbox = gr.Textbox(
-                                        label       = "Max pitch",
-                                        info        = "Specify max pitch for inference [NOTE][OCTAVE]",
-                                        placeholder = "C6",
-                                        visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                        interactive = True,
-                                    )
-
-                                f0method0.change(
-                                    fn=lambda radio: (
-                                        {
-                                            "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
-                                            "__type__": "update"
-                                        }
-                                    ),
-                                    inputs=[f0method0],
-                                    outputs=[crepe_hop_length]
+                                minpitch_slider = gr.Slider(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 50,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                minpitch_txtbox = gr.Textbox(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C5",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
                                 )
 
-                                f0method0.change(
-                                    fn=switch_pitch_controls,
-                                    inputs=[f0method0],
-                                    outputs=[minpitch_slider, minpitch_txtbox,
-                                             maxpitch_slider, maxpitch_txtbox]
-                                )                            
+                                maxpitch_slider = gr.Slider(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 1100,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                maxpitch_txtbox = gr.Textbox(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C6",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
+                                )
+
+                            f0method0.change(
+                                fn=lambda radio: (
+                                    {
+                                        "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
+                                        "__type__": "update"
+                                    }
+                                ),
+                                inputs=[f0method0],
+                                outputs=[crepe_hop_length]
+                            )
+
+                            f0method0.change(
+                                fn=switch_pitch_controls,
+                                inputs=[f0method0],
+                                outputs=[minpitch_slider, minpitch_txtbox,
+                                         maxpitch_slider, maxpitch_txtbox]
+                            )                            
+                            
+                            with gr.Column():
+                                resample_sr0 = gr.Slider(
+                                    minimum=0,
+                                    maximum=48000,
+                                    label=i18n("后处理重采样至最终采样率，0为不进行重采样"),
+                                    value=0,
+                                    step=1,
+                                    interactive=True,
+                                )
+                                rms_mix_rate0 = gr.Slider(
+                                    minimum=0,
+                                    maximum=1,
+                                    label=i18n("输入源音量包络替换输出音量包络融合比例，越靠近1越使用输出包络"),
+                                    value=0.25,
+                                    interactive=True,
+                                )
+                                protect0 = gr.Slider(
+                                    minimum=0,
+                                    maximum=0.5,
+                                    label=i18n(
+                                        "保护清辅音和呼吸声，防止电音撕裂等artifact，拉满0.5不开启，调低加大保护力度但可能降低索引效果"
+                                    ),
+                                    value=0.33,
+                                    step=0.01,
+                                    interactive=True,
+                                )
+                                formanting = gr.Checkbox(
+                                    value=bool(DoFormant),
+                                    label="Formant shift inference audio",
+                                    info="Used for male to female and vice-versa conversions",
+                                    interactive=True,
+                                    visible=True,
+                                )
                                 
-                                with gr.Column():
-                                    resample_sr0 = gr.Slider(
-                                        minimum=0,
-                                        maximum=48000,
-                                        label=i18n("后处理重采样至最终采样率，0为不进行重采样"),
-                                        value=0,
-                                        step=1,
-                                        interactive=True,
-                                    )
-                                    rms_mix_rate0 = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        label=i18n("输入源音量包络替换输出音量包络融合比例，越靠近1越使用输出包络"),
-                                        value=0.25,
-                                        interactive=True,
-                                    )
-                                    protect0 = gr.Slider(
-                                        minimum=0,
-                                        maximum=0.5,
-                                        label=i18n(
-                                            "保护清辅音和呼吸声，防止电音撕裂等artifact，拉满0.5不开启，调低加大保护力度但可能降低索引效果"
-                                        ),
-                                        value=0.33,
-                                        step=0.01,
-                                        interactive=True,
-                                    )
-                                    formanting = gr.Checkbox(
-                                        value=bool(DoFormant),
-                                        label="Formant shift inference audio",
-                                        info="Used for male to female and vice-versa conversions",
-                                        interactive=True,
-                                        visible=True,
-                                    )
-                                    
-                                    formant_preset = gr.Dropdown(
-                                        value='',
-                                        choices=get_fshift_presets(),
-                                        label='Browse presets for formanting',
-                                        info='Presets are located in formantshiftcfg/ folder',
-                                        visible=bool(DoFormant),
-                                    )
-                                    
-                                    formant_refresh_button = gr.Button(
-                                        value='\U0001f504',
-                                        visible=bool(DoFormant),
-                                        variant='primary',
-                                    )
-                                    
-                                    qfrency = gr.Slider(
-                                            value=Quefrency,
-                                            info="Default value is 1.0",
-                                            label="Quefrency for formant shifting",
-                                            minimum=0.0,
-                                            maximum=16.0,
-                                            step=0.1,
-                                            visible=bool(DoFormant),
-                                            interactive=True,
-                                    )
-                                        
-                                    tmbre = gr.Slider(
-                                        value=Timbre,
+                                formant_preset = gr.Dropdown(
+                                    value='',
+                                    choices=get_fshift_presets(),
+                                    label='Browse presets for formanting',
+                                    info='Presets are located in formantshiftcfg/ folder',
+                                    visible=bool(DoFormant),
+                                )
+                                
+                                formant_refresh_button = gr.Button(
+                                    value='\U0001f504',
+                                    visible=bool(DoFormant),
+                                    variant='primary',
+                                )
+                                
+                                qfrency = gr.Slider(
+                                        value=Quefrency,
                                         info="Default value is 1.0",
-                                        label="Timbre for formant shifting",
+                                        label="Quefrency for formant shifting",
                                         minimum=0.0,
                                         maximum=16.0,
                                         step=0.1,
                                         visible=bool(DoFormant),
                                         interactive=True,
-                                    )
-                                    frmntbut = gr.Button("Apply", variant="primary", visible=bool(DoFormant))
+                                )
+                                    
+                                tmbre = gr.Slider(
+                                    value=Timbre,
+                                    info="Default value is 1.0",
+                                    label="Timbre for formant shifting",
+                                    minimum=0.0,
+                                    maximum=16.0,
+                                    step=0.1,
+                                    visible=bool(DoFormant),
+                                    interactive=True,
+                                )
+                                frmntbut = gr.Button("Apply", variant="primary", visible=bool(DoFormant))
 
-                                formant_preset.change(fn=preset_apply, inputs=[formant_preset, qfrency, tmbre], outputs=[qfrency, tmbre])
-                                
-                                formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
-                                frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
-                                formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
+                            formant_preset.change(fn=preset_apply, inputs=[formant_preset, qfrency, tmbre], outputs=[qfrency, tmbre])
+                            
+                            formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
+                            frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
+                            formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
 
                     # Function to toggle advanced settings
                     def toggle_advanced_settings(checkbox):
