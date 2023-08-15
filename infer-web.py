@@ -1280,31 +1280,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 vc_transform0 = gr.Number(
                                     label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
                                 )
-                                f0method0 = gr.Radio(
-                                    label=i18n(
-                                        "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
-                                    ),
-                                    choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
-                                    value="rmvpe",
-                                    interactive=True,
-                                )
-                                crepe_hop_length = gr.Slider(
-                                    minimum=1,
-                                    maximum=512,
-                                    step=1,
-                                    label=i18n("crepe_hop_length"),
-                                    value=120,
-                                    interactive=True,
-                                    visible=False,
-                                )
-                                filter_radius0 = gr.Slider(
-                                    minimum=0,
-                                    maximum=7,
-                                    label=i18n(">=3则使用对harvest音高识别的结果使用中值滤波，数值为滤波半径，使用可以削弱哑音"),
-                                    value=3,
-                                    step=1,
-                                    interactive=True,
-                                )
                                 file_index2 = gr.Dropdown(
                                     label="3. Path to your added.index file (if it didn't automatically find it.)",
                                     choices=get_indexes(),
@@ -1322,63 +1297,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive=True,
                                 )
 
-                                
-                                with gr.Column():
-                                    minpitch_slider = gr.Slider(
-                                        label       = "Min pitch",
-                                        info        = "Specify minimal pitch for inference [HZ]",
-                                        step        = 0.1,
-                                        minimum     = 1,
-                                        scale       = 0,
-                                        value       = 50,
-                                        maximum     = 16000,
-                                        interactive = True,
-                                        visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                    )
-                                    minpitch_txtbox = gr.Textbox(
-                                        label       = "Min pitch",
-                                        info        = "Specify minimal pitch for inference [NOTE][OCTAVE]",
-                                        placeholder = "C5",
-                                        visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                        interactive = True,
-                                    )
-
-                                    maxpitch_slider = gr.Slider(
-                                        label       = "Max pitch",
-                                        info        = "Specify max pitch for inference [HZ]",
-                                        step        = 0.1,
-                                        minimum     = 1,
-                                        scale       = 0,
-                                        value       = 1100,
-                                        maximum     = 16000,
-                                        interactive = True,
-                                        visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                    )
-                                    maxpitch_txtbox = gr.Textbox(
-                                        label       = "Max pitch",
-                                        info        = "Specify max pitch for inference [NOTE][OCTAVE]",
-                                        placeholder = "C6",
-                                        visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
-                                        interactive = True,
-                                    )
-
-                                f0method0.change(
-                                    fn=lambda radio: (
-                                        {
-                                            "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
-                                            "__type__": "update"
-                                        }
-                                    ),
-                                    inputs=[f0method0],
-                                    outputs=[crepe_hop_length]
-                                )
-
-                                f0method0.change(
-                                    fn=switch_pitch_controls,
-                                    inputs=[f0method0],
-                                    outputs=[minpitch_slider, minpitch_txtbox,
-                                             maxpitch_slider, maxpitch_txtbox]
-                                )
                             
                     with gr.Row(): # Advanced settings tab
                         with gr.Accordion(label = "Advanced Settings", open = False):
@@ -1394,6 +1312,89 @@ def GradioSetup(UTheme=gr.themes.Soft()):
 
                             clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                             clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+                            
+                            f0method0 = gr.Radio(
+                                label=i18n(
+                                    "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
+                                ),
+                                choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
+                                value="rmvpe",
+                                interactive=True,
+                            )
+                            crepe_hop_length = gr.Slider(
+                                minimum=1,
+                                maximum=512,
+                                step=1,
+                                label=i18n("crepe_hop_length"),
+                                value=120,
+                                interactive=True,
+                                visible=False,
+                            )
+                            filter_radius0 = gr.Slider(
+                                minimum=0,
+                                maximum=7,
+                                label=i18n(">=3则使用对harvest音高识别的结果使用中值滤波，数值为滤波半径，使用可以削弱哑音"),
+                                value=3,
+                                step=1,
+                                interactive=True,
+                            )    
+
+                            with gr.Column():
+                                minpitch_slider = gr.Slider(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 50,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                minpitch_txtbox = gr.Textbox(
+                                    label       = "Min pitch",
+                                    info        = "Specify minimal pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C5",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
+                                )
+
+                                maxpitch_slider = gr.Slider(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [HZ]",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 1100,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = (not rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                )
+                                maxpitch_txtbox = gr.Textbox(
+                                    label       = "Max pitch",
+                                    info        = "Specify max pitch for inference [NOTE][OCTAVE]",
+                                    placeholder = "C6",
+                                    visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
+                                    interactive = True,
+                                )
+
+                            f0method0.change(
+                                fn=lambda radio: (
+                                    {
+                                        "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
+                                        "__type__": "update"
+                                    }
+                                ),
+                                inputs=[f0method0],
+                                outputs=[crepe_hop_length]
+                            )
+
+                            f0method0.change(
+                                fn=switch_pitch_controls,
+                                inputs=[f0method0],
+                                outputs=[minpitch_slider, minpitch_txtbox,
+                                         maxpitch_slider, maxpitch_txtbox]
+                            )                            
                             
                             with gr.Column():
                                 resample_sr0 = gr.Slider(
