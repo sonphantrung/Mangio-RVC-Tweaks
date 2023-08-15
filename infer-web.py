@@ -424,7 +424,7 @@ def get_vc(sid, to_return_protect0, to_return_protect1):
     n_spk = cpt["config"][-3]
 
     return (
-        {"visible": True, "maximum": n_spk, "__type__": "update"},
+        {"visible": False, "maximum": n_spk, "__type__": "update"},
         to_return_protect0,
         to_return_protect1
     )
@@ -1386,7 +1386,22 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     outputs=[minpitch_slider, minpitch_txtbox,
                                              maxpitch_slider, maxpitch_txtbox]
                                 )
+                            
+                    with gr.Row(): # Advanced settings tab
+                        with gr.Accordion(label = "Advanced Settings", open = False):
+                            with gr.Column():
+                                file_index1 = gr.Textbox(
+                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                    value="",
+                                    interactive=True,
+                                )
+                            
+                            with gr.Accordion(label = "f0 [Root pitch] File", open = False):
+                                f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
 
+                            clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                            clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+                            
                             with gr.Column():
                                 resample_sr0 = gr.Slider(
                                     minimum=0,
@@ -1465,21 +1480,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
                             
                             but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
-                            
-                    with gr.Row(): # Advanced settings tab
-                        with gr.Accordion(label = "Advanced Settings", open = False):
-                            with gr.Column():
-                                file_index1 = gr.Textbox(
-                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                    value="",
-                                    interactive=True,
-                                )
-                            
-                            with gr.Accordion(label = "f0 [Root pitch] File", open = False):
-                                f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
-
-                            clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
-                            clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
                     
                     with gr.Row(): # Defines output info + output audio download after conversion
                         vc_output1 = gr.Textbox(label=i18n("输出信息"))
