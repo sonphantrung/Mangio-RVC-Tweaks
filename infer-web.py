@@ -1247,12 +1247,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
                 
                 with gr.TabItem("Single"):
-                    with gr.Row(): # Defines 'Refresh voice list'
-                        
-
-                        
-
-                        #clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                    with gr.Row(): 
                         spk_item = gr.Slider(
                             minimum=0,
                             maximum=2333,
@@ -1266,10 +1261,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
 
                     with gr.Group(): # Defines whole single inference option section
                         with gr.Row():
-                            with gr.Column():
-                                vc_transform0 = gr.Number(
-                                    label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
-                                )
+                            with gr.Column(): # First column for audio-related inputs
                                 input_audio0 = gr.Textbox(
                                     label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
                                     value=os.path.join(now_dir, "audios", "audio.wav"),
@@ -1280,17 +1272,19 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value='',
                                     interactive=True,
                                 )
+                                
                                 input_audio1.select(fn=lambda:'',inputs=[],outputs=[input_audio0])
-
                                 input_audio0.input(fn=lambda:'',inputs=[],outputs=[input_audio1])
 
+                            with gr.Column(): # Second column for pitch shift and other options
+                                vc_transform0 = gr.Number(
+                                    label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
+                                )
                                 f0method0 = gr.Radio(
                                     label=i18n(
                                         "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                                     ),
                                     choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
-                                    # [ MANGIO ]: Fork Feature. Added Crepe-Tiny.
-                                    # [ALEXLNKP]: Fork Feature. Added RMVPE+.
                                     value="rmvpe",
                                     interactive=True,
                                 )
@@ -1303,7 +1297,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive=True,
                                     visible=False,
                                 )
-                                
                                 filter_radius0 = gr.Slider(
                                     minimum=0,
                                     maximum=7,
@@ -1312,16 +1305,15 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     step=1,
                                     interactive=True,
                                 )
-                                
                                 file_index2 = gr.Dropdown(
                                     label="3. Path to your added.index file (if it didn't automatically find it.)",
                                     choices=get_indexes(),
                                     interactive=True,
                                     allow_custom_value=True,
-                                    )
+                                )
                                 refresh_button.click(
                                     fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
-                                    )
+                                )
                                 index_rate1 = gr.Slider(
                                     minimum=0,
                                     maximum=1,
@@ -1329,6 +1321,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value=0.75,
                                     interactive=True,
                                 )
+
                                 
                                 with gr.Column():
                                     minpitch_slider = gr.Slider(
@@ -1478,19 +1471,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             formanting.change(fn=formant_enabled,inputs=[formanting,qfrency,tmbre],outputs=[formanting,qfrency,tmbre,frmntbut,formant_preset,formant_refresh_button])
                             frmntbut.click(fn=formant_apply,inputs=[qfrency, tmbre], outputs=[qfrency, tmbre])
                             formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
-                            
-                            but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
+                           
                     
                     with gr.Row(): # Defines output info + output audio download after conversion
                         vc_output1 = gr.Textbox(label=i18n("输出信息"))
                         vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
-                        
-                    #file_index1 = gr.Textbox(
-                    #    label=i18n("The purpose of this textbox is to define the variable early so I can move 'Advanced Settings' Earlier."),
-                    #    value="",
-                    #    interactive=True,
-                    #    visible=False,
-                    #)
+
+                    but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
 
                     with gr.Group(): # I think this defines the big convert button
                         with gr.Row():
