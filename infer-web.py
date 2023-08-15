@@ -1242,9 +1242,15 @@ def note_to_hz(note_name):
     return frequency
     
 def save_to_wav2(dropbox):
-    file_path=dropbox.name
-    shutil.move(file_path,'./audios')
-    return os.path.join('./audios',os.path.basename(file_path))
+    file_path = dropbox.name
+    target_path = os.path.join('./audios', os.path.basename(file_path))
+
+    if os.path.exists(target_path):
+        os.remove(target_path)
+        print('Replacing old dropdown file...')
+
+    shutil.move(file_path, target_path)
+    return target_path
     
 def change_choices2():
     #audio_files=[]
@@ -1286,10 +1292,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             with gr.Column(): # First column for audio-related inputs
                           
                                 dropbox = gr.File(label="Drop your audio here & hit the Reload button.")
-                                input_audio0 = gr.Textbox(
-                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
-                                    value=os.path.join(now_dir, "audios", "audio.wav"),
-                                )
                                 input_audio1 = gr.Dropdown(
                                     label=i18n("Auto detect audio path and select from the dropdown:"),
                                     choices=sorted(audio_paths),
@@ -1308,7 +1310,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
                                 )
                                 file_index2 = gr.Dropdown(
-                                    label="3. Path to your added.index file (if it didn't automatically find it.)",
+                                    label="Path to your added.index file (if it didn't automatically find it.)",
                                     choices=get_indexes(),
                                     interactive=True,
                                     allow_custom_value=True,
@@ -1346,6 +1348,11 @@ def GradioSetup(UTheme=gr.themes.Soft()):
 
                                 clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                                 clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+                                
+                                input_audio0 = gr.Textbox(
+                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
+                                    value=os.path.join(now_dir, "audios", "audio.wav"),
+                                )
                             
                             with gr.Column():
                                 f0method0 = gr.Radio(
@@ -1518,11 +1525,11 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         outputs=[advanced_settings]
                     )                           
                     
+                    but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=True)
+                    
                     with gr.Row(): # Defines output info + output audio download after conversion
                         vc_output1 = gr.Textbox(label=i18n("输出信息"))
                         vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
-
-                    but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=True)
 
                     with gr.Group(): # I think this defines the big convert button
                         with gr.Row():
