@@ -1232,6 +1232,7 @@ def note_to_hz(note_name):
     return frequency
 
 def GradioSetup(UTheme=gr.themes.Soft()):
+
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
         gr.Markdown(
@@ -1242,7 +1243,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
         with gr.Tabs():
             with gr.TabItem(i18n("模型推理")):
                 with gr.TabItem("Single"):
-                    with gr.Row():
+                    with gr.Row(): # Defines 'Refresh voice list'
                         
                         sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
                         
@@ -1259,7 +1260,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         )
                         clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
 
-                    with gr.Group():
+                    with gr.Group(): # Defines whole single inference option section
                         gr.Markdown(
                             value=i18n("男转女推荐+12key, 女转男推荐-12key, 如果音域爆炸导致音色失真也可以自己调整到合适音域. ")
                         )
@@ -1308,12 +1309,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     label=i18n(">=3则使用对harvest音高识别的结果使用中值滤波，数值为滤波半径，使用可以削弱哑音"),
                                     value=3,
                                     step=1,
-                                    interactive=True,
-                                )
-                            with gr.Column():
-                                file_index1 = gr.Textbox(
-                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                    value="",
                                     interactive=True,
                                 )
                                 
@@ -1472,11 +1467,44 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             
                             but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
                     
-                    with gr.Row():
+                    with gr.Row(): # Defines output info + output audio download after conversion
                         vc_output1 = gr.Textbox(label=i18n("输出信息"))
                         vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
+                        
+                    with gr.Group(): # Advanced settings tab
+                        with gr.Accordion(label = "Advanced Settings", open = False):
+                            with gr.Column():
+                                file_index1 = gr.Textbox(
+                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                    value="",
+                                    interactive=True,
+                                )
+                            with gr.Column():
+                                penis = gr.Slider(
+                                    label       = "TEST",
+                                    info        = "Specify minimal LENGTH for TEST",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 50,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = True,
+                                )
+                            with gr.Column():
+                                penis2 = gr.Slider(
+                                    label       = "TEST 2",
+                                    info        = "Specify minimal LENGTH for TEST",
+                                    step        = 0.1,
+                                    minimum     = 1,
+                                    scale       = 0,
+                                    value       = 50,
+                                    maximum     = 16000,
+                                    interactive = True,
+                                    visible     = True,
+                                )
 
-                    with gr.Group():
+                    with gr.Group(): # I think this defines the big convert button
                         with gr.Row():
                             but0.click(
                                 vc_single,
@@ -1500,8 +1528,9 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 ],
                                 [vc_output1, vc_output2],
                             )
+                    
                 with gr.TabItem("Batch"):
-                    with gr.Group():
+                    with gr.Group(): # Markdown explanation of batch inference
                         gr.Markdown(
                             value=i18n("批量转换, 输入待转换音频文件夹, 或上传多个音频文件, 在指定文件夹(默认opt)下输出转换的音频. ")
                         )
@@ -1622,7 +1651,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         inputs=[sid0, protect0, protect1],
                         outputs=[spk_item, protect0, protect1],
                     )
-            with gr.TabItem(i18n("伴奏人声分离&去混响&去回声")):
+            with gr.TabItem(i18n("伴奏人声分离&去混响&去回声")): # UVR section 
                 with gr.Group():
                     gr.Markdown(
                         value=i18n(
