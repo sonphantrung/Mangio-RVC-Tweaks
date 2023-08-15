@@ -256,7 +256,10 @@ def vc_single(
         except AssertionError:
             message = "Mismatching index version detected (v1 with v2, or v2 with v1)."
             print(message)
-            print("Specific error:", str(e))
+            return message, None
+        except NameError:
+            message = "RVC libraries are still loading. Please try again in a few seconds."
+            print(message)
             return message, None
         
         if tgt_sr != resample_sr >= 16000:
