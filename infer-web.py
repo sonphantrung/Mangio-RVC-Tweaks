@@ -1292,6 +1292,10 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             with gr.Column(): # First column for audio-related inputs
                           
                                 dropbox = gr.File(label="Drop your audio here & hit the Reload button.")
+                                input_audio0 = gr.Textbox(
+                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
+                                    value=os.path.join(now_dir, "audios", "audio.wav"),
+                                )
                                 input_audio1 = gr.Dropdown(
                                     label=i18n("Auto detect audio path and select from the dropdown:"),
                                     choices=sorted(audio_paths),
@@ -1348,11 +1352,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
 
                                 clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                                 clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
-                                
-                                input_audio0 = gr.Textbox(
-                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
-                                    value=os.path.join(now_dir, "audios", "audio.wav"),
-                                )
                             
                             with gr.Column():
                                 f0method0 = gr.Radio(
@@ -1360,7 +1359,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                         "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                                     ),
                                     choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
-                                    value="rmvpe",
+                                    value="rmvpe+",
                                     interactive=True,
                                 )
                                 crepe_hop_length = gr.Slider(
