@@ -1329,8 +1329,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive=True,
                                 )
                                 
-                                with gr.Accordion(label = "f0 [Root pitch] File", open = False):
-                                    f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
                                 with gr.Column():
                                     minpitch_slider = gr.Slider(
                                         label       = "Min pitch",
@@ -1466,12 +1464,8 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             formant_refresh_button.click(fn=update_fshift_presets,inputs=[formant_preset, qfrency, tmbre],outputs=[formant_preset, qfrency, tmbre])
                             
                             but0 = gr.Button(i18n("转换"), variant="primary").style(full_width=False)
-                    
-                    with gr.Row(): # Defines output info + output audio download after conversion
-                        vc_output1 = gr.Textbox(label=i18n("输出信息"))
-                        vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
-                        
-                    with gr.Group(): # Advanced settings tab
+                            
+                    with gr.Row(): # Advanced settings tab
                         with gr.Accordion(label = "Advanced Settings", open = False):
                             with gr.Column():
                                 file_index1 = gr.Textbox(
@@ -1479,6 +1473,10 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value="",
                                     interactive=True,
                                 )
+                                
+                            with gr.Accordion(label = "f0 [Root pitch] File", open = False):
+                                f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
+
                             with gr.Column():
                                 penis = gr.Slider(
                                     label       = "TEST",
@@ -1503,6 +1501,17 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     interactive = True,
                                     visible     = True,
                                 )
+                    
+                    with gr.Row(): # Defines output info + output audio download after conversion
+                        vc_output1 = gr.Textbox(label=i18n("输出信息"))
+                        vc_output2 = gr.Audio(label=i18n("输出音频(右下角三个点,点了可以下载)"))
+                        
+                    #file_index1 = gr.Textbox(
+                    #    label=i18n("The purpose of this textbox is to define the variable early so I can move 'Advanced Settings' Earlier."),
+                    #    value="",
+                    #    interactive=True,
+                    #    visible=False,
+                    #)
 
                     with gr.Group(): # I think this defines the big convert button
                         with gr.Row():
@@ -1528,6 +1537,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 ],
                                 [vc_output1, vc_output2],
                             )
+                           
                     
                 with gr.TabItem("Batch"):
                     with gr.Group(): # Markdown explanation of batch inference
