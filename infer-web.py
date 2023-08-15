@@ -1248,7 +1248,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
                         
                         refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
-                        clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                        #clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                         spk_item = gr.Slider(
                             minimum=0,
                             maximum=2333,
@@ -1258,7 +1258,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                             visible=False,
                             interactive=True,
                         )
-                        clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+                        #clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
 
                     with gr.Group(): # Defines whole single inference option section
                         gr.Markdown(
@@ -1473,34 +1473,12 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value="",
                                     interactive=True,
                                 )
-                                
+                            
                             with gr.Accordion(label = "f0 [Root pitch] File", open = False):
                                 f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
 
-                            with gr.Column():
-                                penis = gr.Slider(
-                                    label       = "TEST",
-                                    info        = "Specify minimal LENGTH for TEST",
-                                    step        = 0.1,
-                                    minimum     = 1,
-                                    scale       = 0,
-                                    value       = 50,
-                                    maximum     = 16000,
-                                    interactive = True,
-                                    visible     = True,
-                                )
-                            with gr.Column():
-                                penis2 = gr.Slider(
-                                    label       = "TEST 2",
-                                    info        = "Specify minimal LENGTH for TEST",
-                                    step        = 0.1,
-                                    minimum     = 1,
-                                    scale       = 0,
-                                    value       = 50,
-                                    maximum     = 16000,
-                                    interactive = True,
-                                    visible     = True,
-                                )
+                            clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                            clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
                     
                     with gr.Row(): # Defines output info + output audio download after conversion
                         vc_output1 = gr.Textbox(label=i18n("输出信息"))
