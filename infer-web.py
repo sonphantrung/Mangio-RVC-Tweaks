@@ -216,6 +216,7 @@ def vc_single(
         f0_max = f0_max or 1100
     try:
         input_audio_path1 = input_audio_path1 or input_audio_path0
+        print("load")
         audio = load_audio(input_audio_path1,
                            16000,
                            DoFormant=rvc_globals.DoFormant,
