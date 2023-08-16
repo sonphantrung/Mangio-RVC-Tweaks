@@ -84,7 +84,6 @@ class VC(object):
         self.t_center = self.sr * self.x_center  # 查询切点位置
         self.t_max = self.sr * self.x_max  # 免查询时长阈值
         self.device = config.device
-        self.model_rmvpe = rmvpe.RMVPE("rmvpe.pt", is_half=config.is_half, device=self.device)
         self.f0_method_dict = {
             "pm": self.get_pm,
             "harvest": self.get_harvest,
@@ -241,6 +240,7 @@ class VC(object):
 
 
     def get_rmvpe(self, x, *args, **kwargs):
+        self.model_rmvpe = rmvpe.RMVPE("rmvpe.pt", is_half=self.is_half, device=self.device)
         return self.model_rmvpe.infer_from_audio(x, thred=0.03)
         if "privateuseone" in str(self.device):
                 del self.model_rmvpe.model
