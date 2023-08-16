@@ -330,13 +330,6 @@ class MelSpectrogram(torch.nn.Module):
 class RMVPE:
     def __init__(self, model_path, is_half, device=None):
         self.resample_kernel = {}
-        model = E2E(4, 1, (2, 2))
-        ckpt = torch.load(model_path, map_location="cpu")
-        model.load_state_dict(ckpt)
-        model.eval()
-        if is_half == True:
-            model = model.half()
-        self.model = model
         self.resample_kernel = {}
         self.is_half = is_half
         if device is None:
@@ -345,7 +338,22 @@ class RMVPE:
         self.mel_extractor = MelSpectrogram(
             is_half, 128, 16000, 1024, 160, None, 30, 8000
         ).to(device)
-        self.model = self.model.to(device)
+        if "privateuseone" in str(device):
+            import onnxruntime as ort
+
+            ort_session = ort.InferenceSession(
+                "rmvpe.onnx", providers=["DmlExecutionProvider"]
+            )
+            self.model = ort_session
+        else:
+            model = E2E(4, 1, (2, 2))
+            ckpt = torch.load(model_path, map_location="cpu")
+            model.load_state_dict(ckpt)
+            model.eval()
+            if is_half == True:
+                model = model.half()
+            self.model = model
+            self.model = self.model.to(device)
         cents_mapping = 20 * np.arange(360) + 1997.3794084376191
         self.cents_mapping = np.pad(cents_mapping, (4, 4))  # 368
 

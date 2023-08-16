@@ -32,7 +32,7 @@ gr = lazyload("gradio")
 SF = lazyload("soundfile")
 SFWrite = SF.write
 from config import Config
-from fairseq import checkpoint_utils
+import fairseq
 from i18n import I18nAuto
 from lib.infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
@@ -83,6 +83,12 @@ Quefrency = rvc_globals.Quefrency
 Timbre = rvc_globals.Timbre
 
 config = Config()
+if(config.dml==True):
+    def forward_dml(ctx, x, scale):
+        ctx.scale = scale
+        res = x.clone().detach()
+        return res
+    fairseq.modules.grad_multiply.GradMultiply.forward=forward_dml
 i18n = I18nAuto()
 i18n.print()
 # 判断是否有能用来训练和加速推理的N卡
@@ -110,7 +116,7 @@ hubert_model = None
 
 def load_hubert():
     global hubert_model
-    models, _, _ = checkpoint_utils.load_model_ensemble_and_task(["hubert_base.pt"], suffix="")
+    models, _, _ = fairseq.checkpoint_utils.load_model_ensemble_and_task(["hubert_base.pt"], suffix="")
     hubert_model = models[0].to(config.device)
     
     if config.is_half:
