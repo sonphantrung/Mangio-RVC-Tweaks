@@ -189,6 +189,7 @@ def vc_single(
     note_min:          str,
     f0_max:            int,
     note_max:          str,
+    f0_autotune:       bool
 ):
     global tgt_sr, net_g, vc, hubert_model, version
     if not input_audio_path0 and not input_audio_path1:
@@ -249,6 +250,7 @@ def vc_single(
                 version,
                 protect,
                 crepe_hop_length,
+                f0_autotune,
                 f0_file=f0_file,
                 f0_min=f0_min,
                 f0_max=f0_max
@@ -1362,6 +1364,10 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value="rmvpe+",
                                     interactive=True,
                                 )
+                                f0_autotune = gr.Checkbox(
+                                    label="Enable autotune",
+                                    interactive=True
+                                )
                                 crepe_hop_length = gr.Slider(
                                     minimum=1,
                                     maximum=512,
@@ -1551,6 +1557,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     crepe_hop_length,
                                     minpitch_slider, minpitch_txtbox,
                                     maxpitch_slider, maxpitch_txtbox,
+                                    f0_autotune
                                 ],
                                 [vc_output1, vc_output2],
                             )
