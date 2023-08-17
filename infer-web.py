@@ -190,6 +190,8 @@ def vc_single(
     f0_max:            int,
     note_max:          str,
 ):
+    global total_time
+    total_time = 0
     global tgt_sr, net_g, vc, hubert_model, version
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
@@ -197,6 +199,8 @@ def vc_single(
     if (not os.path.exists(input_audio_path0)) and (not os.path.exists(os.path.join(now_dir, input_audio_path0))):
         return "Audio was not properly selected or doesn't exist", None
     
+    # This might be jank, but I'm trying to make sure this gets the right file...
+    input_audio_path1 = input_audio_path1 or input_audio_path0
     print(f"\nStarting inference for '{os.path.basename(input_audio_path1)}'")
     print("-------------------")
 
@@ -211,7 +215,6 @@ def vc_single(
         f0_min = f0_min or 50
         f0_max = f0_max or 1100
     try:
-        input_audio_path1 = input_audio_path1 or input_audio_path0
         print(f"Attempting to load {input_audio_path1}....")
         audio = load_audio(input_audio_path1,
                            16000,
@@ -225,7 +228,7 @@ def vc_single(
             
         times = [0, 0, 0]
         if not hubert_model:
-            print("Attempting to load HuBERT...")
+            print("Loading HuBERT for the first time...")
             load_hubert()
         
         try:
