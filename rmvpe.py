@@ -563,17 +563,18 @@ class MelSpectrogram(torch.nn.Module):
 
 
 class RMVPE:
-    def __init__(self, model_path, is_half, device=None):
+    def __init__(self, model_path, is_half, onnx, device=None):
         self.resample_kernel = {}
         self.resample_kernel = {}
         self.is_half = is_half
+        self.onnx = onnx
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.mel_extractor = MelSpectrogram(
             is_half, 128, 16000, 1024, 160, None, 30, 8000
         ).to(device)
-        if "privateuseone" in str(device):
+        if onnx:
             import onnxruntime as ort
 
             ort_session = ort.InferenceSession(
@@ -598,7 +599,8 @@ class RMVPE:
             mel = F.pad(
                 mel, (0, 32 * ((n_frames - 1) // 32 + 1) - n_frames), mode="reflect"
             )
-            if "privateuseone" in str(self.device):
+            #if "privateuseone" in str(self.device):
+            if self.onnx:
                 onnx_input_name = self.model.get_inputs()[0].name
                 onnx_outputs_names = self.model.get_outputs()[0].name
                 hidden = self.model.run(
@@ -629,7 +631,7 @@ class RMVPE:
         # torch.cuda.synchronize()
         t2 = ttime()
         # print(234234,hidden.device.type)
-        if "privateuseone" not in str(self.device):
+        if not self.onnx:
             hidden = hidden.squeeze(0).cpu().numpy()
         else:
             hidden = hidden[0]

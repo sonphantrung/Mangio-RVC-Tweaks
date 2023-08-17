@@ -195,9 +195,10 @@ def vc_single(
     note_min:          str,
     f0_max:            int,
     note_max:          str,
-    f0_autotune:       bool
+    f0_autotune:       bool,
 ):
     global tgt_sr, net_g, vc, hubert_model, version
+    rmvpe_onnx = True if f0_method == "rmvpe_onnx" else False
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
 
@@ -258,6 +259,7 @@ def vc_single(
                 protect,
                 crepe_hop_length,
                 f0_autotune,
+                rmvpe_onnx,
                 f0_file=f0_file,
                 f0_min=f0_min,
                 f0_max=f0_max
@@ -1270,7 +1272,7 @@ def change_choices2():
 
 def GradioSetup(UTheme=gr.themes.Soft()):
 
-    with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
+    with gr.Blocks(theme="gradio/monochrome", title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
         gr.Markdown(
             value=i18n(
@@ -1367,7 +1369,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     label=i18n(
                                         "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                                     ),
-                                    choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe+"], 
+                                    choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe", "rmvpe_onnx", "rmvpe+"], 
                                     value="rmvpe+",
                                     interactive=True,
                                 )

@@ -89,6 +89,7 @@ class VC(object):
             "harvest": self.get_harvest,
             "dio": self.get_dio,
             "rmvpe": self.get_rmvpe,
+            "rmvpe_onnx": self.get_rmvpe,
             "rmvpe+": self.get_pitch_dependant_rmvpe,
             "crepe": self.get_f0_official_crepe_computation,
             "crepe-tiny": partial(self.get_f0_official_crepe_computation, model='model'),
@@ -110,6 +111,7 @@ class VC(object):
             2093.00, 2217.46, 2349.32, 2489.02, 2637.02, 2793.83,
             2959.96, 3135.96, 3322.44, 3520.00, 3729.31, 3951.07
         ]
+        self.onnx = False
 
     # Fork Feature: Get the best torch device to use for f0 algorithms that require a torch device. Will return the type (torch.device)
     def get_optimal_torch_device(self, index: int = 0) -> torch.device:
@@ -240,12 +242,13 @@ class VC(object):
 
 
     def get_rmvpe(self, x, *args, **kwargs):
-        self.model_rmvpe = rmvpe.RMVPE("rmvpe.pt", is_half=self.is_half, device=self.device)
-        return self.model_rmvpe.infer_from_audio(x, thred=0.03)
+        self.model_rmvpe = rmvpe.RMVPE("rmvpe.pt", is_half=self.is_half, device=self.device, onnx=self.onnx)
+        f0 = self.model_rmvpe.infer_from_audio(x, thred=0.03)
         if "privateuseone" in str(self.device):
                 del self.model_rmvpe.model
                 del self.model_rmvpe
                 print("cleaning ortruntime memory")
+        return f0
 
     def get_pitch_dependant_rmvpe(self, x, f0_min=1, f0_max=40000, *args, **kwargs):
         return self.model_rmvpe.infer_from_audio_with_pitch(x, thred=0.03, f0_min=f0_min, f0_max=f0_max)
@@ -312,6 +315,7 @@ class VC(object):
         filter_radius,
         crepe_hop_length,
         f0_autotune,
+        rmvpe_onnx,
         inp_f0=None,
         f0_min=50,
         f0_max=1100,
@@ -322,9 +326,8 @@ class VC(object):
         f0_mel_max = 1127 * np.log(1 + f0_max / 700)
         params = {'x': x, 'p_len': p_len, 'f0_up_key': f0_up_key, 'f0_min': f0_min, 
           'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
-          'crepe_hop_length': crepe_hop_length, 'model': "full"
+          'crepe_hop_length': crepe_hop_length, 'model': "full", 'onnx': rmvpe_onnx
         }
-        f0 = self.f0_method_dict[f0_method](**params)
 
         if "hybrid" in f0_method:
             # Perform hybrid median pitch estimation
@@ -340,6 +343,8 @@ class VC(object):
                 crepe_hop_length,
                 time_step,
             )
+        else:
+            f0 = self.f0_method_dict[f0_method](**params)
 
         if f0_autotune:
             f0 = self.autotune_f0(f0)
@@ -506,7 +511,7 @@ class VC(object):
 
     def pipeline(self, model, net_g, sid, audio, input_audio_path, times, f0_up_key, f0_method,
             file_index, index_rate, if_f0, filter_radius, tgt_sr, resample_sr, rms_mix_rate,
-            version, protect, crepe_hop_length, f0_autotune, f0_file=None, f0_min=50, f0_max=1100):
+            version, protect, crepe_hop_length, f0_autotune, rmvpe_onnx, f0_file=None, f0_min=50, f0_max=1100):
         try:
             index = faiss.read_index(file_index)
             big_npy = index.reconstruct_n(0, index.ntotal)
@@ -550,7 +555,7 @@ class VC(object):
         if if_f0:
             pitch, pitchf = self.get_f0(
                 input_audio_path, audio_pad, p_len, f0_up_key, f0_method,
-                filter_radius, crepe_hop_length, f0_autotune, inp_f0, f0_min, f0_max)
+                filter_radius, crepe_hop_length, f0_autotune, rmvpe_onnx, inp_f0, f0_min, f0_max)
             
             pitch = pitch[:p_len].astype(np.int64 if self.device != 'mps' else np.float32)
             pitchf = pitchf[:p_len].astype(np.float32)

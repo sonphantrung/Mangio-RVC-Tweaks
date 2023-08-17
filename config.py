@@ -234,6 +234,7 @@ class Config:
             import torch_directml
 
             self.device = torch_directml.device(torch_directml.default_device())
+            print(self.device)
             self.is_half = False
         else:
             if self.instead:
