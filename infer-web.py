@@ -1287,6 +1287,7 @@ def change_choices2():
 def GradioSetup(UTheme=gr.themes.Soft()):
 
     default_weight = names[0] if names else ''
+    initial_sid0_value = default_weight  # Use the value you set as default
 
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
@@ -1302,6 +1303,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     refresh_button = gr.Button(i18n("Refresh Files"), variant="primary")
                     clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                     clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+
                 
                 with gr.TabItem("Single"):
                     with gr.Row(): 
@@ -1337,10 +1339,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 dropbox.upload(fn=save_to_wav2, inputs=[dropbox], outputs=[input_audio0])
                                 dropbox.upload(fn=change_choices2, inputs=[], outputs=[input_audio1])
 
+                            best_match_index_path1, _ = match_index(sid0.value)
+
                             with gr.Column(): # Second column for pitch shift and other options
                                 file_index2 = gr.Dropdown(
                                     label="Detected path to your added.index file (adjust it wasn't automatically found)",
                                     choices=get_indexes(),
+                                    value=best_match_index_path1,
                                     interactive=True,
                                     allow_custom_value=True,
                                 )
@@ -1597,9 +1602,11 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 file_index4 = gr.Dropdown(
                                     label=i18n("自动检测index路径,下拉式选择(dropdown)"),
                                     choices=get_indexes(),
+                                    value=best_match_index_path1,
                                     interactive=True,
                                 )
                                 sid0.select(fn=match_index, inputs=[sid0], outputs=[file_index2, file_index4])
+
                                 refresh_button.click(
                                     fn=lambda: change_choices()[1],
                                     inputs=[],
@@ -1717,11 +1724,14 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     ],
                                     [vc_output3],
                                 )
+
                     sid0.change(
                         fn=get_vc,
                         inputs=[sid0, protect0, protect1],
                         outputs=[spk_item, protect0, protect1],
                     )
+
+                    spk_item, protect0, protect1 = get_vc(sid0.value, protect0, protect1)
 
                     # Function to toggle advanced settings
                     def toggle_advanced_settings_batch(checkbox):
