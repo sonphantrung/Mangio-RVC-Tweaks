@@ -1,3 +1,17 @@
+# 8/17 Changelog
+- First model + index preloads on boot so you can inference immediately (someguy.mp3 is now the default file too)
+- Index search bug where it would always expect eXXX_sXXX pattern is fixed
+- Batch inference overhauls in layout and exporting now directly exports as the filetype
+- Hertz is the default unit for pitch ranges now + it uses global setting on boot
+- Misc translation adjustments to be more concise and minor extra error handling
+- Inference prints out progress to the console
+
+# 8/15 Changelog
+- Refactor entire inference interface to be much more user friendly
+- Make rmvpe+ default (this sets the specific pitch range of 50-1100hz like all other methods do)
+- Other misc translation adjustments
+- Error handling for when torch hasn't fully loaded + mismatch version index
+
 # 8/6 Changelog
 - Completely rewrote code for training related stripts, `train_nsf_sim_cache_sid_load_pretrain.py`, `trainset_preprocess_pipeline_print.py`, etc
 - Got rid of CSV database (mostly, still use STOP.csv cause Popen is trash and can't access a global var file when it is changed, for some reason)
