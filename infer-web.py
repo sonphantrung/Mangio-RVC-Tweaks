@@ -223,7 +223,12 @@ def vc_single(
         if not hubert_model:
             load_hubert()
         
-        if_f0 = cpt.get("f0", 1)
+        try:
+            if_f0 = cpt.get("f0", 1)
+        except NameError:
+            message = "Model was not properly selected."
+            print(message)
+            return message, None
         
         file_index = (
             file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
@@ -1243,7 +1248,7 @@ def note_to_hz(note_name):
     
 def save_to_wav2(dropbox):
     file_path = dropbox.name
-    target_path = os.path.join('./audios', os.path.basename(file_path))
+    target_path = os.path.join('audios', os.path.basename(file_path))
 
     if os.path.exists(target_path):
         os.remove(target_path)
@@ -1253,26 +1258,24 @@ def save_to_wav2(dropbox):
     return target_path
     
 def change_choices2():
-    #audio_files=[]
-    #for filename in os.listdir("./audios"):
-        #if filename.endswith(('.wav','.mp3','.ogg','.flac','.m4a','.aac','.mp4')):
-            #audio_files.append(os.path.join('./audios',filename).replace('\\', '/'))
     return ""
 
 def GradioSetup(UTheme=gr.themes.Soft()):
 
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
-        gr.Markdown(
-            value=i18n(
-                "本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>使用需遵守的协议-LICENSE.txt</b>."
-            )
-        )
+        # gr.Markdown(
+        #     value=i18n(
+        #         "本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>使用需遵守的协议-LICENSE.txt</b>."
+        #     )
+        #)
         with gr.Tabs():
             with gr.TabItem(i18n("模型推理")):
                 with gr.Row():
                     sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
-                    refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
+                    refresh_button = gr.Button(i18n("Refresh Files"), variant="primary")
+                    clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                    clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
                 
                 with gr.TabItem("Single"):
                     with gr.Row(): 
@@ -1290,14 +1293,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     with gr.Group(): # Defines whole single inference option section
                         with gr.Row():
                             with gr.Column(): # First column for audio-related inputs
-                          
-                                dropbox = gr.File(label="Drop your audio here & hit the Reload button.")
+                                dropbox = gr.File(label="Drop your audio here & hit the Refresh button")
                                 input_audio0 = gr.Textbox(
-                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
+                                    label=i18n("Manual path to the audio file to be processed"),
                                     value=os.path.join(now_dir, "audios", "audio.wav"),
                                 )
                                 input_audio1 = gr.Dropdown(
-                                    label=i18n("Auto detect audio path and select from the dropdown:"),
+                                    label=i18n("Or instead select a file from the /audios/ folder"),
                                     choices=sorted(audio_paths),
                                     value='',
                                     interactive=True,
@@ -1310,17 +1312,11 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 dropbox.upload(fn=change_choices2, inputs=[], outputs=[input_audio1])
 
                             with gr.Column(): # Second column for pitch shift and other options
-                                vc_transform0 = gr.Number(
-                                    label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
-                                )
                                 file_index2 = gr.Dropdown(
-                                    label="Path to your added.index file (if it didn't automatically find it.)",
+                                    label="Detected path to your added.index file (adjust it wasn't automatically found)",
                                     choices=get_indexes(),
                                     interactive=True,
                                     allow_custom_value=True,
-                                )
-                                refresh_button.click(
-                                    fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
                                 )
                                 index_rate1 = gr.Slider(
                                     minimum=0,
@@ -1329,6 +1325,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value=0.75,
                                     interactive=True,
                                 )
+                                refresh_button.click(
+                                    fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
+                                )
+                                with gr.Column():
+                                    vc_transform0 = gr.Number(
+                                        label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
+                                    )
         
                     # Create a checkbox for advanced settings
                     advanced_settings_checkbox = gr.Checkbox(
@@ -1340,19 +1343,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     # Advanced settings container        
                     with gr.Column(visible=False) as advanced_settings: # Initially hidden
                         with gr.Row(label = "Advanced Settings", open = False):
-                            with gr.Column():
-                                file_index1 = gr.Textbox(
-                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                    value="",
-                                    interactive=True,
-                                )
-                            
-                                with gr.Accordion(label = "f0 [Root pitch] File", open = False):
-                                    f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
-
-                                clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
-                                clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
-                            
                             with gr.Column():
                                 f0method0 = gr.Radio(
                                     label=i18n(
@@ -1417,6 +1407,16 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
                                     interactive = True,
                                 )
+
+                            with gr.Column():
+                                file_index1 = gr.Textbox(
+                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                    value="",
+                                    interactive=True,
+                                )
+                            
+                                with gr.Accordion(label = "f0 [Root pitch] File", open = False):
+                                    f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
 
                             f0method0.change(
                                 fn=lambda radio: (
@@ -2190,7 +2190,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 )
                     noteshertz = gr.Checkbox(
                         label       = "Whether to use note names instead of their hertz value. E.G. [C5, D6] instead of [523.25, 1174.66]Hz",
-                        value       = True,
+                        value       = rvc_globals.NotesOrHertz,
                         interactive = True,
                     )
             
@@ -2204,13 +2204,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     maxpitch_slider, maxpitch_txtbox,]
             )
 
-            with gr.TabItem(tab_faq):
-                try:
-                    with open(faq_file, "r", encoding="utf8") as f:
-                        info = f.read()
-                    gr.Markdown(value=info)
-                except:
-                    gr.Markdown(traceback.format_exc())
+            #with gr.TabItem(tab_faq):
+                #try:
+                    #with open(faq_file, "r", encoding="utf8") as f:
+                        #info = f.read()
+                    #gr.Markdown(value=info)
+                #except:
+                    #gr.Markdown(traceback.format_exc())
         return app
 
 def GradioRun(app):
