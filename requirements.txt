@@ -1,6 +1,5 @@
 fairseq==0.12.2
 faiss_cpu==1.7.3
-ffmpeg==1.4
 ffmpeg_python==0.2.0
 gradio==3.34.0
 gTTS==2.3.2
