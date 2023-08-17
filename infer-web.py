@@ -1286,8 +1286,7 @@ def change_choices2():
 
 def GradioSetup(UTheme=gr.themes.Soft()):
 
-    default_weight = names[0] if names else ''
-    initial_sid0_value = default_weight  # Use the value you set as default
+    default_weight = names[0] if names else '' # Set the first found weight as the preloaded model
 
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
@@ -1324,7 +1323,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 dropbox = gr.File(label="Drop your audio here & hit the Refresh button")
                                 input_audio0 = gr.Textbox(
                                     label=i18n("Manual path to the audio file to be processed"),
-                                    value=os.path.join(now_dir, "audios", "audio.wav"),
+                                    value=os.path.join(now_dir, "audios", "someguy.mp3"),
                                 )
                                 input_audio1 = gr.Dropdown(
                                     label=i18n("Or instead select a file from the /audios/ folder"),
@@ -1339,7 +1338,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 dropbox.upload(fn=save_to_wav2, inputs=[dropbox], outputs=[input_audio0])
                                 dropbox.upload(fn=change_choices2, inputs=[], outputs=[input_audio1])
 
-                            best_match_index_path1, _ = match_index(sid0.value)
+                            best_match_index_path1, _ = match_index(sid0.value) # Get initial index from default sid0 (first voice model in list)
 
                             with gr.Column(): # Second column for pitch shift and other options
                                 file_index2 = gr.Dropdown(
@@ -1731,7 +1730,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                         outputs=[spk_item, protect0, protect1],
                     )
 
-                    spk_item, protect0, protect1 = get_vc(sid0.value, protect0, protect1)
+                    spk_item, protect0, protect1 = get_vc(sid0.value, protect0, protect1) # Set VC parameters for the preloaded model
 
                     # Function to toggle advanced settings
                     def toggle_advanced_settings_batch(checkbox):
