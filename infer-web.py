@@ -192,6 +192,7 @@ def vc_single(
 ):
     global total_time
     total_time = 0
+    start_time = time.time()
     global tgt_sr, net_g, vc, hubert_model, version
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
@@ -280,7 +281,10 @@ def vc_single(
             
         index_info = "Using index:%s." % file_index if os.path.exists(file_index) else "Index not used."
 
-        return f"Success.\n {index_info}\nTime:\n npy:{times[0]}, f0:{times[1]}, infer:{times[2]}", (tgt_sr, audio_opt)
+        end_time = time.time()
+        total_time = end_time - start_time
+
+        return f"Success.\n {index_info}\nTime:\n npy:{times[0]}, f0:{times[1]}, infer:{times[2]}\nTotal Time: {total_time}", (tgt_sr, audio_opt)
     except:
         info = traceback.format_exc()
         print(info)
