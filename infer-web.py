@@ -1215,13 +1215,13 @@ def switch_pitch_controls(f0method0):
 
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
-    sid0strip = os.path.split(sid0strip)[-1]
+    sid0name = os.path.split(sid0strip)[-1]  # Extract only the name, not the directory
 
     # Check if the sid0strip has the specific ending format _eXXX_sXXX
-    if re.match(r'.+_e\d+_s\d+$', sid0strip):
-        base_model_name = sid0strip.rsplit('_', 2)[0]
+    if re.match(r'.+_e\d+_s\d+$', sid0name):
+        base_model_name = sid0name.rsplit('_', 2)[0]
     else:
-        base_model_name = sid0strip
+        base_model_name = sid0name
 
     sid_directory = os.path.join(index_root, base_model_name)
     directories_to_search = [sid_directory] if os.path.exists(sid_directory) else []
@@ -1231,19 +1231,25 @@ def match_index(sid0: str) -> tuple:
 
     for directory in directories_to_search:
         for filename in os.listdir(directory):
-            if filename.endswith('.index') and 'trained' not in filename and any(name.lower() in filename.lower() for name in [sid0strip, base_model_name]):
-                index_path = os.path.join(directory, filename)
-                if index_path in indexes_list:
-                    matching_index_files.append((index_path, os.path.getsize(index_path), ' ' not in filename))
+            if filename.endswith('.index') and 'trained' not in filename:
+                # Condition to match the name
+                name_match = any(name.lower() in filename.lower() for name in [sid0name, base_model_name])
+                
+                # If in the specific directory, it's automatically a match
+                folder_match = directory == sid_directory
+
+                if name_match or folder_match:
+                    index_path = os.path.join(directory, filename)
+                    if index_path in indexes_list:
+                        matching_index_files.append((index_path, os.path.getsize(index_path), ' ' not in filename))
 
     if matching_index_files:
         # Sort by favoring files without spaces and by size (largest size first)
         matching_index_files.sort(key=lambda x: (-x[2], -x[1]))
         best_match_index_path = matching_index_files[0][0]
         return best_match_index_path, best_match_index_path
-                
-    return '', ''
 
+    return '', ''
 def stoptraining(mim):
     if mim:
         try:
