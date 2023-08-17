@@ -1215,12 +1215,15 @@ def switch_pitch_controls(f0method0):
 
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
-
     sid0strip = os.path.split(sid0strip)[-1]
 
-    base_model_name = sid0strip.rsplit('_', 2)[0]
+    # Check if the sid0strip has the specific ending format _eXXX_sXXX
+    if re.match(r'.+_e\d+_s\d+$', sid0strip):
+        base_model_name = sid0strip.rsplit('_', 2)[0]
+    else:
+        base_model_name = sid0strip
+
     sid_directory = os.path.join(index_root, base_model_name)
-    
     directories_to_search = [sid_directory] if os.path.exists(sid_directory) else []
     directories_to_search.append(index_root)
 
@@ -1283,6 +1286,8 @@ def change_choices2():
 
 def GradioSetup(UTheme=gr.themes.Soft()):
 
+    default_weight = names[0] if names else ''
+
     with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
         # gr.Markdown(
@@ -1293,7 +1298,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
         with gr.Tabs():
             with gr.TabItem(i18n("模型推理")):
                 with gr.Row():
-                    sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
+                    sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value=default_weight)
                     refresh_button = gr.Button(i18n("Refresh Files"), variant="primary")
                     clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
                     clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
