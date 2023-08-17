@@ -195,7 +195,10 @@ def vc_single(
         return "You need to upload an audio", None
 
     if (not os.path.exists(input_audio_path0)) and (not os.path.exists(os.path.join(now_dir, input_audio_path0))):
-        return "Audio doesn't exist!!!!!!!!", None
+        return "Audio was not properly selected or doesn't exist", None
+    
+    print(f"\nStarting inference for '{os.path.basename(input_audio_path1)}'")
+    print("-------------------")
 
     f0_up_key = int(f0_up_key)
     
@@ -209,6 +212,7 @@ def vc_single(
         f0_max = f0_max or 1100
     try:
         input_audio_path1 = input_audio_path1 or input_audio_path0
+        print(f"Attempting to load {input_audio_path1}....")
         audio = load_audio(input_audio_path1,
                            16000,
                            DoFormant=rvc_globals.DoFormant,
@@ -221,12 +225,13 @@ def vc_single(
             
         times = [0, 0, 0]
         if not hubert_model:
+            print("Attempting to load HuBERT...")
             load_hubert()
         
         try:
             if_f0 = cpt.get("f0", 1)
         except NameError:
-            message = "Model was not properly selected."
+            message = "Model was not properly selected"
             print(message)
             return message, None
         
@@ -271,7 +276,7 @@ def vc_single(
             tgt_sr = resample_sr
             
         index_info = "Using index:%s." % file_index if os.path.exists(file_index) else "Index not used."
-        
+
         return f"Success.\n {index_info}\nTime:\n npy:{times[0]}, f0:{times[1]}, infer:{times[2]}", (tgt_sr, audio_opt)
     except:
         info = traceback.format_exc()
@@ -2229,5 +2234,9 @@ def GradioRun(app):
 #endregion
 
 if __name__ == "__main__":
+    print("\n--Mangio-RVC-Fork--")
+    if os.name == 'nt': # Weird Windows async error when replacing a file.
+        print("Any ConnectionResetErrors post-conversion are irrelevant and purely visual; they can be ignored\n")
+    print("-------------------")
     app = GradioSetup(UTheme=config.grtheme)
     GradioRun(app)
