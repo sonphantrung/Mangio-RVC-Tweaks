@@ -513,8 +513,19 @@ class VC(object):
             file_index, index_rate, if_f0, filter_radius, tgt_sr, resample_sr, rms_mix_rate,
             version, protect, crepe_hop_length, f0_autotune, rmvpe_onnx, f0_file=None, f0_min=50, f0_max=1100):
         try:
-            index = faiss.read_index(file_index)
-            big_npy = index.reconstruct_n(0, index.ntotal)
+            if file_index == "":
+                print("File index was empty.")
+                index = None
+                big_npy = None
+            else:
+                if os.path.exists(file_index):
+                    sys.stdout.write(f"Attempting to load {file_index}....\n")
+                    sys.stdout.flush()
+                else:
+                    sys.stdout.write(f"Attempting to load {file_index}.... (despite it not existing)\n")
+                    sys.stdout.flush()
+                index = faiss.read_index(file_index)
+                big_npy = index.reconstruct_n(0, index.ntotal)
         except Exception:
             print("Could not open Faiss index file for reading.")
             index = None
@@ -596,4 +607,7 @@ class VC(object):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        print("Returning completed audio...")
+        print("-------------------")
+        
         return audio_opt

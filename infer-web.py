@@ -197,13 +197,21 @@ def vc_single(
     note_max:          str,
     f0_autotune:       bool,
 ):
+    global total_time
+    total_time = 0
+    start_time = time.time()
     global tgt_sr, net_g, vc, hubert_model, version
     rmvpe_onnx = True if f0_method == "rmvpe_onnx" else False
     if not input_audio_path0 and not input_audio_path1:
         return "You need to upload an audio", None
 
     if (not os.path.exists(input_audio_path0)) and (not os.path.exists(os.path.join(now_dir, input_audio_path0))):
-        return "Audio doesn't exist!!!!!!!!", None
+        return "Audio was not properly selected or doesn't exist", None
+    
+    # This might be jank, but I'm trying to make sure this gets the right file...
+    input_audio_path1 = input_audio_path1 or input_audio_path0
+    print(f"\nStarting inference for '{os.path.basename(input_audio_path1)}'")
+    print("-------------------")
 
     f0_up_key = int(f0_up_key)
     
@@ -216,8 +224,11 @@ def vc_single(
         f0_min = f0_min or 50
         f0_max = f0_max or 1100
     try:
+
         input_audio_path1 = input_audio_path1 or input_audio_path0
-        print("load")
+
+        print(f"Attempting to load {input_audio_path1}....")
+
         audio = load_audio(input_audio_path1,
                            16000,
                            DoFormant=rvc_globals.DoFormant,
@@ -230,9 +241,15 @@ def vc_single(
             
         times = [0, 0, 0]
         if not hubert_model:
+            print("Loading HuBERT for the first time...")
             load_hubert()
         
-        if_f0 = cpt.get("f0", 1)
+        try:
+            if_f0 = cpt.get("f0", 1)
+        except NameError:
+            message = "Model was not properly selected"
+            print(message)
+            return message, None
         
         file_index = (
             file_index.strip(" ").strip('"').strip("\n").strip('"').strip(" ").replace("trained", "added")
@@ -277,8 +294,11 @@ def vc_single(
             tgt_sr = resample_sr
             
         index_info = "Using index:%s." % file_index if os.path.exists(file_index) else "Index not used."
-        
-        return f"Success.\n {index_info}\nTime:\n npy:{times[0]}, f0:{times[1]}, infer:{times[2]}", (tgt_sr, audio_opt)
+
+        end_time = time.time()
+        total_time = end_time - start_time
+
+        return f"Success.\n {index_info}\nTime:\n npy:{times[0]}, f0:{times[1]}, infer:{times[2]}\nTotal Time: {total_time} seconds", (tgt_sr, audio_opt)
     except:
         info = traceback.format_exc()
         print(info)
@@ -329,13 +349,22 @@ def vc_multi(
             if "Success" in info:
                 try:
                     tgt_sr, audio_opt = opt
-                    output_path = f"{opt_root}/{os.path.basename(path)}"
-                    path, extension = output_path if format1 in ["wav", "flac", "mp3", "ogg", "aac"] else f"{output_path}.wav", format1
+                    #sys.stdout.write(f"\nTarget Sample Rate (tgt_sr): {tgt_sr}") # Debugging print
+                    base_name = os.path.splitext(os.path.basename(path))[0]
+                    output_path = f"{opt_root}/{base_name}.{format1}"
+                    path, extension = output_path, format1
+                    path, extension = output_path if format1 in ["wav", "flac", "mp3", "ogg", "aac", "m4a"] else f"{output_path}.wav", format1
+                    #sys.stdout.write(f"\nOutput Path: {path}") # Debugging print
+                    #sys.stdout.write(f"\nFile Extension: {extension}") # Debugging print
                     SFWrite(path, audio_opt, tgt_sr)
-                    if os.path.exists(path) and extension not in ["wav", "flac", "mp3", "ogg", "aac"]:
-                        os.system(f"ffmpeg -i {RQuote(path)} -vn {RQuote(path[:-4])}.{RQuote(extension)} -q:a 2 -y")
+                    #sys.stdout.write("\nFile Written Successfully with SFWrite") # Debugging print
+                    if os.path.exists(path) and extension not in ["wav", "flac", "mp3", "ogg", "aac", "m4a"]:
+                        sys.stdout.write(f"Running command: ffmpeg -i {RQuote(path)} -vn {RQuote(path[:-4] + '.' + extension)} -q:a 2 -y")
+                        os.system(f"ffmpeg -i {RQuote(path)} -vn {RQuote(path[:-4] + '.' + extension)} -q:a 2 -y")
+                        #print(f"\nFile Converted to {extension} using ffmpeg") # Debugging print
                 except:
                     info += traceback.format_exc()
+                    print(f"\nException encountered: {info}") # Debugging print
             infos.append(f"{os.path.basename(path)}->{info}")
             yield "\n".join(infos)
         yield "\n".join(infos)
@@ -1200,12 +1229,15 @@ def switch_pitch_controls(f0method0):
 
 def match_index(sid0: str) -> tuple:
     sid0strip = re.sub(r'\.pth|\.onnx$', '', sid0)
+    sid0name = os.path.split(sid0strip)[-1]  # Extract only the name, not the directory
 
-    sid0strip = os.path.split(sid0strip)[-1]
+    # Check if the sid0strip has the specific ending format _eXXX_sXXX
+    if re.match(r'.+_e\d+_s\d+$', sid0name):
+        base_model_name = sid0name.rsplit('_', 2)[0]
+    else:
+        base_model_name = sid0name
 
-    base_model_name = sid0strip.rsplit('_', 2)[0]
     sid_directory = os.path.join(index_root, base_model_name)
-    
     directories_to_search = [sid_directory] if os.path.exists(sid_directory) else []
     directories_to_search.append(index_root)
 
@@ -1213,19 +1245,25 @@ def match_index(sid0: str) -> tuple:
 
     for directory in directories_to_search:
         for filename in os.listdir(directory):
-            if filename.endswith('.index') and 'trained' not in filename and any(name.lower() in filename.lower() for name in [sid0strip, base_model_name]):
-                index_path = os.path.join(directory, filename)
-                if index_path in indexes_list:
-                    matching_index_files.append((index_path, os.path.getsize(index_path), ' ' not in filename))
+            if filename.endswith('.index') and 'trained' not in filename:
+                # Condition to match the name
+                name_match = any(name.lower() in filename.lower() for name in [sid0name, base_model_name])
+                
+                # If in the specific directory, it's automatically a match
+                folder_match = directory == sid_directory
+
+                if name_match or folder_match:
+                    index_path = os.path.join(directory, filename)
+                    if index_path in indexes_list:
+                        matching_index_files.append((index_path, os.path.getsize(index_path), ' ' not in filename))
 
     if matching_index_files:
         # Sort by favoring files without spaces and by size (largest size first)
         matching_index_files.sort(key=lambda x: (-x[2], -x[1]))
         best_match_index_path = matching_index_files[0][0]
         return best_match_index_path, best_match_index_path
-                
-    return '', ''
 
+    return '', ''
 def stoptraining(mim):
     if mim:
         try:
@@ -1254,7 +1292,7 @@ def note_to_hz(note_name):
     
 def save_to_wav2(dropbox):
     file_path = dropbox.name
-    target_path = os.path.join('./audios', os.path.basename(file_path))
+    target_path = os.path.join('audios', os.path.basename(file_path))
 
     if os.path.exists(target_path):
         os.remove(target_path)
@@ -1264,26 +1302,25 @@ def save_to_wav2(dropbox):
     return target_path
     
 def change_choices2():
-    #audio_files=[]
-    #for filename in os.listdir("./audios"):
-        #if filename.endswith(('.wav','.mp3','.ogg','.flac','.m4a','.aac','.mp4')):
-            #audio_files.append(os.path.join('./audios',filename).replace('\\', '/'))
     return ""
 
 def GradioSetup(UTheme=gr.themes.Soft()):
-
-    with gr.Blocks(theme="gradio/monochrome", title='Mangio-RVC-Web 💻') as app:
+    default_weight = names[0] if names else '' # Set the first found weight as the preloaded model
+    with gr.Blocks(theme=UTheme, title='Mangio-RVC-Web 💻') as app:
         gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
-        gr.Markdown(
-            value=i18n(
-                "本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>使用需遵守的协议-LICENSE.txt</b>."
-            )
-        )
+        # gr.Markdown(
+        #     value=i18n(
+        #         "本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>使用需遵守的协议-LICENSE.txt</b>."
+        #     )
+        #)
         with gr.Tabs():
             with gr.TabItem(i18n("模型推理")):
                 with gr.Row():
-                    sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value='')
-                    refresh_button = gr.Button(i18n("Refresh voice list, index path and audio files"), variant="primary")
+                    sid0 = gr.Dropdown(label=i18n("推理音色"), choices=sorted(names), value=default_weight)
+                    refresh_button = gr.Button(i18n("Refresh Files"), variant="primary")
+                    clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
+                    clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
+
                 
                 with gr.TabItem("Single"):
                     with gr.Row(): 
@@ -1301,14 +1338,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     with gr.Group(): # Defines whole single inference option section
                         with gr.Row():
                             with gr.Column(): # First column for audio-related inputs
-                          
-                                dropbox = gr.File(label="Drop your audio here & hit the Reload button.")
+                                dropbox = gr.File(label="Drop your audio here & hit the Refresh button")
                                 input_audio0 = gr.Textbox(
-                                    label=i18n("Add audio's name to the path to the audio file to be processed (default is the correct format example) Remove the path to use an audio from the dropdown list:"),
-                                    value=os.path.join(now_dir, "audios", "audio.wav"),
+                                    label=i18n("Manual path to the audio file to be processed"),
+                                    value=os.path.join(now_dir, "audios", "someguy.mp3"),
                                 )
                                 input_audio1 = gr.Dropdown(
-                                    label=i18n("Auto detect audio path and select from the dropdown:"),
+                                    label=i18n("Or instead select a file from the /audios/ folder"),
                                     choices=sorted(audio_paths),
                                     value='',
                                     interactive=True,
@@ -1320,18 +1356,15 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 dropbox.upload(fn=save_to_wav2, inputs=[dropbox], outputs=[input_audio0])
                                 dropbox.upload(fn=change_choices2, inputs=[], outputs=[input_audio1])
 
+                            best_match_index_path1, _ = match_index(sid0.value) # Get initial index from default sid0 (first voice model in list)
+
                             with gr.Column(): # Second column for pitch shift and other options
-                                vc_transform0 = gr.Number(
-                                    label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
-                                )
                                 file_index2 = gr.Dropdown(
-                                    label="Path to your added.index file (if it didn't automatically find it.)",
+                                    label="Detected path to your added.index file (adjust it wasn't automatically found)",
                                     choices=get_indexes(),
+                                    value=best_match_index_path1,
                                     interactive=True,
                                     allow_custom_value=True,
-                                )
-                                refresh_button.click(
-                                    fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
                                 )
                                 index_rate1 = gr.Slider(
                                     minimum=0,
@@ -1340,6 +1373,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     value=0.75,
                                     interactive=True,
                                 )
+                                refresh_button.click(
+                                    fn=change_choices, inputs=[], outputs=[sid0, file_index2, input_audio1]
+                                )
+                                with gr.Column():
+                                    vc_transform0 = gr.Number(
+                                        label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
+                                    )
         
                     # Create a checkbox for advanced settings
                     advanced_settings_checkbox = gr.Checkbox(
@@ -1351,19 +1391,6 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     # Advanced settings container        
                     with gr.Column(visible=False) as advanced_settings: # Initially hidden
                         with gr.Row(label = "Advanced Settings", open = False):
-                            with gr.Column():
-                                file_index1 = gr.Textbox(
-                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                    value="",
-                                    interactive=True,
-                                )
-                            
-                                with gr.Accordion(label = "f0 [Root pitch] File", open = False):
-                                    f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
-
-                                clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
-                                clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
-                            
                             with gr.Column():
                                 f0method0 = gr.Radio(
                                     label=i18n(
@@ -1432,6 +1459,16 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     visible     = (rvc_globals.NotesOrHertz) and (f0method0.value != 'rmvpe'),
                                     interactive = True,
                                 )
+
+                            with gr.Column():
+                                file_index1 = gr.Textbox(
+                                    label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                    value="",
+                                    interactive=True,
+                                )
+                            
+                                with gr.Accordion(label = "Custom f0 [Root pitch] File", open = False):
+                                    f0_file = gr.File(label=i18n("F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调"))
 
                             f0method0.change(
                                 fn=lambda radio: (
@@ -1583,29 +1620,15 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     label=i18n("变调(整数, 半音数量, 升八度12降八度-12)"), value=0
                                 )
                                 opt_input = gr.Textbox(label=i18n("指定输出文件夹"), value="opt")
-                                f0method1 = gr.Radio(
-                                    label=i18n(
-                                        "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
-                                    ),
-                                    choices=["pm", "harvest", "crepe", "rmvpe"],
-                                    value="rmvpe",
-                                    interactive=True,
-                                )
-                                filter_radius1 = gr.Slider(
-                                    minimum=0,
-                                    maximum=7,
-                                    label=i18n(">=3则使用对harvest音高识别的结果使用中值滤波，数值为滤波半径，使用可以削弱哑音"),
-                                    value=3,
-                                    step=1,
-                                    interactive=True,
-                                )
                             with gr.Column():
                                 file_index4 = gr.Dropdown(
                                     label=i18n("自动检测index路径,下拉式选择(dropdown)"),
                                     choices=get_indexes(),
+                                    value=best_match_index_path1,
                                     interactive=True,
                                 )
                                 sid0.select(fn=match_index, inputs=[sid0], outputs=[file_index2, file_index4])
+
                                 refresh_button.click(
                                     fn=lambda: change_choices()[1],
                                     inputs=[],
@@ -1615,36 +1638,10 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     minimum=0,
                                     maximum=1,
                                     label=i18n("检索特征占比"),
-                                    value=1,
+                                    value=0.75,
                                     interactive=True,
                                 )
-                            with gr.Column():
-                                resample_sr1 = gr.Slider(
-                                    minimum=0,
-                                    maximum=48000,
-                                    label=i18n("后处理重采样至最终采样率，0为不进行重采样"),
-                                    value=0,
-                                    step=1,
-                                    interactive=True,
-                                )
-                                rms_mix_rate1 = gr.Slider(
-                                    minimum=0,
-                                    maximum=1,
-                                    label=i18n("输入源音量包络替换输出音量包络融合比例，越靠近1越使用输出包络"),
-                                    value=1,
-                                    interactive=True,
-                                )
-                                protect1 = gr.Slider(
-                                    minimum=0,
-                                    maximum=0.5,
-                                    label=i18n(
-                                        "保护清辅音和呼吸声，防止电音撕裂等artifact，拉满0.5不开启，调低加大保护力度但可能降低索引效果"
-                                    ),
-                                    value=0.33,
-                                    step=0.01,
-                                    interactive=True,
-                                )
-                            with gr.Column():
+                            with gr.Row():
                                 dir_input = gr.Textbox(
                                     label=i18n("输入待处理音频文件夹路径(去文件管理器地址栏拷就行了)"),
                                     value=os.path.join(now_dir, "audios"),
@@ -1653,55 +1650,122 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                     file_count="multiple", label=i18n("也可批量输入音频文件, 二选一, 优先读文件夹")
                                 )
 
-                            with gr.Row(): # Advanced settings tab (for batch) 
-                                with gr.Accordion(label = "Advanced Settings", open = False):
-                                    with gr.Column():
-                                        file_index3 = gr.Textbox(
-                                            label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
-                                            value="",
-                                            interactive=True,
-                                        )
-
-                                    clean_button = gr.Button(i18n("卸载音色省显存"), variant="primary")
-                                    clean_button.click(fn=lambda: ({"value": "", "__type__": "update"}), inputs=[], outputs=[sid0])
-                            
-                            with gr.Row():
-                                format1 = gr.Radio(
-                                    label=i18n("导出文件格式"),
-                                    choices=["wav", "flac", "mp3", "m4a"],
-                                    value="flac",
+                        with gr.Row():
+                            with gr.Column():
+                                # Create a checkbox for advanced batch settings
+                                advanced_settings_batch_checkbox = gr.Checkbox(
+                                    value=False,
+                                    label="Show Advanced Settings",
                                     interactive=True,
                                 )
+                            
+                                # Advanced batch settings container        
+                                with gr.Row(visible=False) as advanced_settings_batch: # Initially hidden
+                                    with gr.Row(label = "Advanced Settings [Batch]", open = False):
+                                        with gr.Column():
+                                            file_index3 = gr.Textbox(
+                                                label=i18n("特征检索库文件路径,为空则使用下拉的选择结果"),
+                                                value="",
+                                                interactive=True,
+                                            )
+
+                                    f0method1 = gr.Radio(
+                                        label=i18n(
+                                            "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
+                                        ),
+                                        choices=["pm", "harvest", "crepe", "rmvpe"],
+                                        value="rmvpe",
+                                        interactive=True,
+                                    )
+                                    filter_radius1 = gr.Slider(
+                                        minimum=0,
+                                        maximum=7,
+                                        label=i18n(">=3则使用对harvest音高识别的结果使用中值滤波，数值为滤波半径，使用可以削弱哑音"),
+                                        value=3,
+                                        step=1,
+                                        interactive=True,
+                                    )
+                                
+                                    with gr.Row():
+                                        format1 = gr.Radio(
+                                            label=i18n("导出文件格式"),
+                                            choices=["wav", "flac", "mp3", "m4a"],
+                                            value="flac",
+                                            interactive=True,
+                                        )
+                                        
+
+                                    with gr.Column():
+                                        resample_sr1 = gr.Slider(
+                                            minimum=0,
+                                            maximum=48000,
+                                            label=i18n("后处理重采样至最终采样率，0为不进行重采样"),
+                                            value=0,
+                                            step=1,
+                                            interactive=True,
+                                        )
+                                        rms_mix_rate1 = gr.Slider(
+                                            minimum=0,
+                                            maximum=1,
+                                            label=i18n("输入源音量包络替换输出音量包络融合比例，越靠近1越使用输出包络"),
+                                            value=1,
+                                            interactive=True,
+                                        )
+                                        protect1 = gr.Slider(
+                                            minimum=0,
+                                            maximum=0.5,
+                                            label=i18n(
+                                                "保护清辅音和呼吸声，防止电音撕裂等artifact，拉满0.5不开启，调低加大保护力度但可能降低索引效果"
+                                            ),
+                                            value=0.33,
+                                            step=0.01,
+                                            interactive=True,
+                                        )
+                                vc_output3 = gr.Textbox(label=i18n("输出信息")) 
                                 but1 = gr.Button(i18n("转换"), variant="primary")
-                                vc_output3 = gr.Textbox(label=i18n("输出信息"))
-                            but1.click(
-                                vc_multi,
-                                [
-                                    spk_item,
-                                    dir_input,
-                                    opt_input,
-                                    inputs,
-                                    vc_transform1,
-                                    f0method1,
-                                    file_index3,
-                                    file_index4,
-                                    index_rate2,
-                                    filter_radius1,
-                                    resample_sr1,
-                                    rms_mix_rate1,
-                                    protect1,
-                                    format1,
-                                    crepe_hop_length,
-                                    minpitch_slider if (not rvc_globals.NotesOrHertz) else minpitch_txtbox,
-                                    maxpitch_slider if (not rvc_globals.NotesOrHertz) else maxpitch_txtbox,
-                                ],
-                                [vc_output3],
-                            )
+                                but1.click(
+                                    vc_multi,
+                                    [
+                                        spk_item,
+                                        dir_input,
+                                        opt_input,
+                                        inputs,
+                                        vc_transform1,
+                                        f0method1,
+                                        file_index3,
+                                        file_index4,
+                                        index_rate2,
+                                        filter_radius1,
+                                        resample_sr1,
+                                        rms_mix_rate1,
+                                        protect1,
+                                        format1,
+                                        crepe_hop_length,
+                                        minpitch_slider if (not rvc_globals.NotesOrHertz) else minpitch_txtbox,
+                                        maxpitch_slider if (not rvc_globals.NotesOrHertz) else maxpitch_txtbox,
+                                    ],
+                                    [vc_output3],
+                                )
+
                     sid0.change(
                         fn=get_vc,
                         inputs=[sid0, protect0, protect1],
                         outputs=[spk_item, protect0, protect1],
                     )
+
+                    spk_item, protect0, protect1 = get_vc(sid0.value, protect0, protect1) # Set VC parameters for the preloaded model
+
+                    # Function to toggle advanced settings
+                    def toggle_advanced_settings_batch(checkbox):
+                        return {"visible": checkbox, "__type__": "update"}
+
+                    # Attach the change event
+                    advanced_settings_batch_checkbox.change(
+                        fn=toggle_advanced_settings_batch,
+                        inputs=[advanced_settings_batch_checkbox],
+                        outputs=[advanced_settings_batch]
+                    )                           
+                    
             with gr.TabItem(i18n("伴奏人声分离&去混响&去回声")): # UVR section 
                 with gr.Group():
                     gr.Markdown(
@@ -2206,7 +2270,7 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                                 )
                     noteshertz = gr.Checkbox(
                         label       = "Whether to use note names instead of their hertz value. E.G. [C5, D6] instead of [523.25, 1174.66]Hz",
-                        value       = True,
+                        value       = rvc_globals.NotesOrHertz,
                         interactive = True,
                     )
             
@@ -2220,13 +2284,13 @@ def GradioSetup(UTheme=gr.themes.Soft()):
                     maxpitch_slider, maxpitch_txtbox,]
             )
 
-            with gr.TabItem(tab_faq):
-                try:
-                    with open(faq_file, "r", encoding="utf8") as f:
-                        info = f.read()
-                    gr.Markdown(value=info)
-                except:
-                    gr.Markdown(traceback.format_exc())
+            #with gr.TabItem(tab_faq):
+                #try:
+                    #with open(faq_file, "r", encoding="utf8") as f:
+                        #info = f.read()
+                    #gr.Markdown(value=info)
+                #except:
+                    #gr.Markdown(traceback.format_exc())
         return app
 
 def GradioRun(app):
@@ -2245,5 +2309,9 @@ def GradioRun(app):
 #endregion
 
 if __name__ == "__main__":
+    print("\n--Mangio-RVC-Fork--")
+    if os.name == 'nt': # Weird Windows async error when replacing a file.
+        print("Any ConnectionResetErrors post-conversion are irrelevant and purely visual; they can be ignored\n")
+    print("-------------------")
     app = GradioSetup(UTheme=config.grtheme)
     GradioRun(app)

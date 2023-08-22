@@ -169,7 +169,7 @@ class Config:
                 or "P40" in self.gpu_name.upper()
                 or "1060" in self.gpu_name
                 or "1070" in self.gpu_name
-                or "1080" in self.gpu_name
+                # or "1080" in self.gpu_name / This is commented out because fp16 apparently runs fast on 1080
             ):
                 print("Found GPU", self.gpu_name, ", force to fp32")
                 self.is_half = False
