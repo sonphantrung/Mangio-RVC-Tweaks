@@ -160,6 +160,9 @@ class FeatureInput(object):
 
         return self.model_rmvpe.infer_from_audio(x, thred=0.03)
 
+    def get_rmvpe_dml(self, x):
+        ...
+
     def get_f0_method_dict(self):
         return {
             "pm": self.get_pm,
