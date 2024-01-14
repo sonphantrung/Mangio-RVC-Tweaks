@@ -109,8 +109,8 @@ class STFT(torch.nn.Module):
         fourier_basis = np.vstack(
             [np.real(fourier_basis[:cutoff, :]), np.imag(fourier_basis[:cutoff, :])]
         )
-        forward_basis = torch.FloatTensor(fourier_basis)
-        inverse_basis = torch.FloatTensor(
+        forward_basis = torch.tensor.half(fourier_basis)
+        inverse_basis = torch.tensor.half(
             np.linalg.pinv(fourier_basis)
         )
 
